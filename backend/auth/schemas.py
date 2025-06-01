@@ -1,10 +1,12 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 from datetime import datetime
 
 class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
+    email: Optional[str]
+    password: Optional[str]
+    username: Optional[str]
+    confirmPassword: Optional[str]
 
 class UserLogin(BaseModel):
     username: str
@@ -13,7 +15,7 @@ class UserLogin(BaseModel):
 class UserOut(BaseModel):
     id: int
     username: str
-    email: EmailStr
+    email: str
     created_at: datetime
     last_login: datetime | None = None
     avatar_url: str | None = None
