@@ -1,1 +1,0 @@
-DB_URL = "postgresql://postgres:dima123ponos@localhost:5432/messenger_db"

@@ -37,6 +37,7 @@ __pycache__
 venv/
 data
 validation_data
+backend/config.py
 
 # Editor directories and files
 .vscode/*

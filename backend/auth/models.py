@@ -14,7 +14,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
 
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=False)
     avatar_url = Column(String, nullable=True)
     bio = Column(String, nullable=True)
 
