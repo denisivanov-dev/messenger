@@ -1,3 +1,6 @@
+import { validateEmail } from "./fields/validateEmail"
+import { validatePassword } from "./fields/validatePassword"
+
 export const validateLoginForm = ({ email, password }) => {
    email = email.trim()
    password = password.trim()
@@ -6,14 +9,15 @@ export const validateLoginForm = ({ email, password }) => {
       return { email: '- Введите email' }
    }
 
-   const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
-   if (!emailRegex.test(email)) {
-      return { email: '- Некорректный email' }
-   }
-
    if (!password) {
       return { password: '- Введите пароль' }
    }
+
+   let error = validateEmail(email)
+   if (error) return error
+   
+   error = validatePassword(password, 'password')
+   if (error) return error
 
    return null
 }

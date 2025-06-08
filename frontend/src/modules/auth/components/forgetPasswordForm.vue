@@ -5,7 +5,7 @@
 
       <form @submit.prevent="onSubmit" class="flex flex-col space-y-6">
         <div>
-          <label class="block text-sm mb-1">Почта</label>
+          <label class="block text-sm mb-1">Email</label>
           <input
             v-model="email"
             type="email"

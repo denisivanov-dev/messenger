@@ -61,10 +61,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../store/authStore'
 import { validateLoginForm } from '../validators/loginValidator'
+import { applyErrors } from '../utils/errorHandler'
+import { autoLoginApi } from '../api/authApi'
 
 const store = useAuthStore()
 const router = useRouter()
@@ -76,18 +78,35 @@ const emailError = ref('')
 const passwordError = ref('')
 
 const onSubmit = async () => {
-	const errors = validateLoginForm({ email: email.value, password: password.value })
+	const data = {
+      email: email.value,
+      password: password.value
+   }
+
+   const errorFields = {
+      email: emailError,
+      password: passwordError
+   }
+	
+	const validationErrors = validateLoginForm(data)
 
 	emailError.value = ''
 	passwordError.value = ''
 
-	if (errors) {
-		if (errors.email) emailError.value = errors.email
-		if (errors.password) passwordError.value = errors.password
-		return
-	}
+	if (validationErrors) {
+      applyErrors(validationErrors, errorFields)
+      return
+   }
 
-	store.login({ email: email.value, password: password.value })
+	try {
+    	const response = await store.login(data)
+		console.info(response)
+		if (response === 'success') {
+        	router.push('/global-chat')
+    	}
+   } catch (backendErrors) {
+      applyErrors(backendErrors, errorFields)
+   }
 }
 
 const onForgotPassword = () => {
@@ -97,4 +116,20 @@ const onForgotPassword = () => {
 const onGoToRegister = () => {
 	router.push('/register')
 }
+
+// onMounted(async () => {
+// 	try {
+// 		const response = await autoLoginApi()
+// 		console.info(response.message)
+// 		if (response?.message === 'success' && response?.accessToken) {
+// 			store.setAccessToken(response.accessToken)
+// 			router.push('/global-chat')
+// 		}
+// 	} catch (error) {
+// 		const status = error.response?.status
+// 		const detail = error.response?.data?.detail
+		
+// 		console.info(status, detail)
+// 	}
+// })
 </script>

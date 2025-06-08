@@ -7,12 +7,14 @@ import { createPinia } from 'pinia'
 import LoginPage from './modules/auth/pages/loginPage.vue'
 import ForgotPasswordPage from './modules/auth/pages/forgotPasswordPage.vue' 
 import registerPage from './modules/auth/pages/registerPage.vue' 
+import confirmRegistration from './modules/auth/pages/confirmRegistration.vue' 
 
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: LoginPage },
   { path: '/forgot-password', component: ForgotPasswordPage },
-  { path: '/register', component: registerPage}
+  { path: '/register', component: registerPage},
+  { path: '/confirm-registration', component: confirmRegistration}
 ]
 
 const router = createRouter({

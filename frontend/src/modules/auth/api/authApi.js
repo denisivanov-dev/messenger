@@ -14,3 +14,13 @@ export const registerApi = async (credentials) => {
   const response = await axiosInstance.post('/api/auth/register', credentials || {})
   return response.data
 }
+
+export const confirmRegistrationApi = async (credentials) => {
+  const response = await axiosInstance.post('/api/auth/confirm-registration', credentials || {})
+  return response.data
+}
+
+export const autoLoginApi = async () => {
+	const response = await axiosInstance.get('/api/auth/auto-login', {withCredentials: true })
+	return response.data
+}

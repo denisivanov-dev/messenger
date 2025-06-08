@@ -19,7 +19,7 @@
             <!-- Name -->
             <div class="mt-5">
                <div class="flex items-center mb-2">
-                  <label class="text-sm text-[#2e2e2e]">Имя</label>
+                  <label class="text-sm text-[#2e2e2e]">Имя пользователя</label>
                   <p v-if="usernameError" class="text-sm text-red-500 mr-auto ml-1">{{ usernameError }}</p>
                </div>
                <input
@@ -122,7 +122,10 @@ const onSubmit = async () => {
    // }
 
    try {
-      await store.register(data)
+      const response = await store.register(data)
+      if (response === 'success') {
+         router.push('/confirm-registration')
+      }
    } catch (backendErrors) {
       applyErrors(backendErrors, errorFields)
    }

@@ -16,41 +16,41 @@ def validate_empty_data(fields: list[tuple[str, str]]) -> tuple[bool, dict[str, 
 
     return True, None, "OK"
 
-def validate_email(email: str) -> Tuple[bool, str]:
-    email = email.lower()
+def validate_email(email: str) -> Tuple[bool, str, Optional[str]]:
+    email = email.lower().strip()
 
-    if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", email):
-        return False, "- Неверный формат email"
+    if not re.fullmatch(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", email):
+        return False, "- Неверный формат email", None
 
     domain = email.split("@")[1]
 
     if domain in BLOCKED_DOMAINS:
-        return False, "- Недопустимый почтовый домен"
+        return False, "- Недопустимый почтовый домен", None
 
-    return True, "OK"
+    return True, "OK", email
 
-def validate_username(username: str) -> Tuple[bool, str]:
-    username = username.lower()
+def validate_username(username: str) -> Tuple[bool, str, Optional[str]]:
+    username = username.lower().strip()
 
     if len(username) < 3 or len(username) > 20:
-        return False, "- Имя пользователя должно быть от 3 до 20 символов"
+        return False, "- Имя пользователя должно быть от 3 до 20 символов", None
     
     if username in FORBIDDEN_USERNAMES:
-        return False, "- Это имя запрещено"
+        return False, "- Это имя запрещено", None
     
-    if not re.match(r"^[a-z][a-z0-9_]*$", username):
-        return False, "- Имя должно содержать только буквы и цифры"
-    
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", username):
+        return False, "- Имя должно содержать только буквы и цифры", None
+
     if username == username[0] * len(username):
-        return False, "- Имя не может состоять из одного символа"
+        return False, "- Имя не может состоять из одного символа", None
     
     if "__" in username:
-        return False, "- Имя не должно содержать двойные подчёркивания"
+        return False, "- Имя не должно содержать двойные подчёркивания", None
     
-    if username[-1] == "_":
-        return False, "- Имя не должно заканчиваться подчёркиванием"
+    if username.endswith("_"):
+        return False, "- Имя не должно заканчиваться подчёркиванием", None
 
-    return True, "OK"
+    return True, "OK", username
 
 def validate_password(password: str, confirm_password: str) -> Tuple[bool, str]:
     if not password:
