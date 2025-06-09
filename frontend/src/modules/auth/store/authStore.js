@@ -36,7 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       const status = error.response?.status
 		  const detail = error.response?.data?.detail
-      console.info(detail)
+
       if (typeof detail === 'object') {
         throw detail
       }

@@ -5,17 +5,17 @@ from datetime import datetime
 
 # ==== AUTH INPUT ====
 
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
 class UserCreate(BaseModel):
     email: Optional[str]
     password: Optional[str]
     username: Optional[str]
     confirmPassword: Optional[str]
 
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
-class NewUserVerify(BaseModel):
+class UserCreateVerify(BaseModel):
     username: str
     email: str
     code: str
@@ -48,7 +48,6 @@ class UserOut(BaseModel):
     }
 
 class PublicUser(BaseModel):
-    id: int
     username: str
     email: str
 
@@ -57,9 +56,13 @@ class PublicUser(BaseModel):
     }
 
 class RegisterResponse(BaseModel):
-    id: int
     message: str
     user: PublicUser
+
+class AutoLoginResponse(BaseModel):
+    message: str
+    user: PublicUser
+    accessToken: str
 
 
 # ==== TOKENS ====

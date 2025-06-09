@@ -78,6 +78,9 @@ const emailError = ref('')
 const passwordError = ref('')
 
 const onSubmit = async () => {
+	emailError.value = ''
+	passwordError.value = ''
+	
 	const data = {
       email: email.value,
       password: password.value
@@ -89,10 +92,6 @@ const onSubmit = async () => {
    }
 	
 	const validationErrors = validateLoginForm(data)
-
-	emailError.value = ''
-	passwordError.value = ''
-
 	if (validationErrors) {
       applyErrors(validationErrors, errorFields)
       return
@@ -100,10 +99,16 @@ const onSubmit = async () => {
 
 	try {
     	const response = await store.login(data)
-		console.info(response)
+
 		if (response === 'success') {
         	router.push('/global-chat')
+			return
     	}
+
+		if (response === 'need_code_verification') {
+			router.push('/confirm-login')
+			return
+		}
    } catch (backendErrors) {
       applyErrors(backendErrors, errorFields)
    }

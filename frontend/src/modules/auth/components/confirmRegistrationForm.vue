@@ -70,6 +70,11 @@ const onSubmit = async () => {
       return
    }
 
+   if (!/^\d+$/.test(code.value)) {
+      codeError.value = '- Код должен состоять из цифр'
+      return
+   }
+
    try {
       const response = await store.confirmRegistration({
          username: store.getUsername,

@@ -35,7 +35,7 @@ async def login(user_data: schemas.UserLogin,
     user = await auth.authenticate_user(db, user_data)
 
     session = await get_user_session_from_user_id(user.id, db)
-    print(session)
+
     if session and session.is_active:
         return JSONResponse(
             status_code=202,
@@ -50,18 +50,20 @@ async def login(user_data: schemas.UserLogin,
     )
     access_token = create_access_token({"sub": str(user.id)})
 
-    response = JSONResponse(content={
-        "message": "success",
-        "user": schemas.PublicUser.from_orm(user),
-        "access_token": access_token
-    })
+    response = JSONResponse(
+        status_code=200,
+        content={
+            "user": schemas.PublicUser.model_validate(user).model_dump(),
+            "access_token": access_token
+        }
+    )
 
     set_refresh_cookie(response, refresh_token)
 
     return response
 
 
-@router.post("/register", response_model=schemas.RegisterResponse)
+@router.post("/register", response_model=schemas.RegisterResponse, status_code=202)
 async def register(user_data: schemas.UserCreate, background_tasks: BackgroundTasks):  
     user = await auth.validate_user(user_data)
 
@@ -73,11 +75,14 @@ async def register(user_data: schemas.UserCreate, background_tasks: BackgroundTa
     
     background_tasks.add_task(send_verification_email, user_data.email, code)
 
-    return {"message": "success", "user": user}
+    return schemas.RegisterResponse(
+        message="success",
+        user=schemas.PublicUser.model_validate(user)
+    )
 
 
-@router.post("/confirm-registration", response_model=schemas.ConfirmRegistrationResponse)
-async def confirm_code(data: schemas.NewUserVerify,  
+@router.post("/confirm-registration")
+async def confirm_code(data: schemas.UserCreateVerify,  
                        request: Request,
                        db: AsyncSession = Depends(get_async_db)
 ):
@@ -108,14 +113,17 @@ async def confirm_code(data: schemas.NewUserVerify,
     await delete_code(data.email, "email_verification")
     await delete_registration_password(data.email)
 
-    response = JSONResponse(content={"message": "success", "access_token": access_token})
+    response = JSONResponse(
+        status_code=200,
+        content={"access_token": access_token}
+    )
 
-    set_refresh_cookie(response, refresh_token)
+    set_refresh_cookie(response, refresh_token) #вернуть юзер айди еще
     
     return response
 
 
-@router.get("/auto-login")
+@router.get("/auto-login", response_model=schemas.AutoLoginResponse)
 async def verify_session(request: Request, db: AsyncSession = Depends(get_async_db)):
     refresh_token = get_refresh_token_from_request()
     if not refresh_token:

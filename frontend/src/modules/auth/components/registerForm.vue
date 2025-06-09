@@ -95,6 +95,11 @@ const passwordError = ref('')
 const confirmPasswordError = ref('')
 
 const onSubmit = async () => {
+   emailError.value = ''
+   usernameError.value = ''
+   passwordError.value = ''
+   confirmPasswordError.value = ''
+   
    const data = {
       email: email.value,
       username: username.value,
@@ -110,12 +115,6 @@ const onSubmit = async () => {
    }
 
    // const validationErrors = validateRegisterForm(data)
-
-   emailError.value = ''
-   usernameError.value = ''
-   passwordError.value = ''
-   confirmPasswordError.value = ''
-
    // if (validationErrors) {
    //    applyErrors(validationErrors, errorFields)
    //    return
@@ -125,6 +124,7 @@ const onSubmit = async () => {
       const response = await store.register(data)
       if (response === 'success') {
          router.push('/confirm-registration')
+         return
       }
    } catch (backendErrors) {
       applyErrors(backendErrors, errorFields)
