@@ -47,7 +47,16 @@ class UserOut(BaseModel):
         "from_attributes": True
     }
 
+class unfinishedPublicUser(BaseModel):
+    username: str
+    email: str
+
+    model_config = {
+        "from_attributes": True
+    }
+
 class PublicUser(BaseModel):
+    id: int
     username: str
     email: str
 
@@ -57,7 +66,7 @@ class PublicUser(BaseModel):
 
 class RegisterResponse(BaseModel):
     message: str
-    user: PublicUser
+    user: unfinishedPublicUser
 
 class AutoLoginResponse(BaseModel):
     message: str

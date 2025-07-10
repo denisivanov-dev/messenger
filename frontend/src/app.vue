@@ -1,3 +1,44 @@
 <template>
   <router-view />
 </template>
+
+<script setup>
+import { onMounted, onUnmounted } from 'vue'
+import { useAuthStore } from './modules/auth/store/authStore'
+import { useChatStore } from './modules/chat/store/chatStore'
+import { useRouter } from 'vue-router'
+
+const authStore = useAuthStore()
+const chatStore = useChatStore()
+const router = useRouter()
+
+let refreshTimer = null
+
+async function initAuthFlow () {
+  await authStore.autoLogin()
+
+  if (authStore.getAccessToken) {
+    chatStore.reconnectIfNeeded?.()
+
+    const guestPages = ['/', '/login', '/register', '/forgot-password', '/confirm-registration']
+    if (guestPages.includes(router.currentRoute.value.path)) {
+      router.replace('/global-chat')
+    }
+
+    if (!refreshTimer) {
+      refreshTimer = setInterval(async () => {
+        const ok = await authStore.refreshToken?.()
+        if (ok && chatStore.isConnected?.()) {
+          chatStore.reconnectIfNeeded?.()
+        }
+      }, 14 * 60 * 1000)
+    }
+  }
+}
+
+onMounted(initAuthFlow)
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
+</script>

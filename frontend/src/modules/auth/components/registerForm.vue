@@ -114,11 +114,11 @@ const onSubmit = async () => {
       confirmPassword: confirmPasswordError
    }
 
-   // const validationErrors = validateRegisterForm(data)
-   // if (validationErrors) {
-   //    applyErrors(validationErrors, errorFields)
-   //    return
-   // }
+   const validationErrors = validateRegisterForm(data)
+   if (validationErrors) {
+      applyErrors(validationErrors, errorFields)
+      return
+   }
 
    try {
       const response = await store.register(data)

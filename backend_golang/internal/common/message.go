@@ -1,0 +1,20 @@
+package common
+
+type IncomingMessage struct {
+	Type       string `json:"type"`
+	ReceiverID string `json:"receiver_id"`
+	ChatType   string `json:"chat_type"`
+	Text       string `json:"text"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
+type OutgoingMessage struct {
+	MessageID  string `json:"message_id"`
+	Text       string `json:"text"`
+	Timestamp  int64  `json:"timestamp"`
+	Username   string `json:"username"`
+	UserID     string `json:"user_id"`
+	Type       string `json:"type"`      
+	ReceiverID string `json:"receiver_id"` 
+	ChatID     string `json:"chat_id"`     
+}

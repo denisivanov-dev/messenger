@@ -24,7 +24,7 @@ export const validateRegisterForm = ({email, username, password, confirmPassword
       return { confirmPassword: '- Подтвердите пароль' }
    }
 
-   let error = validateEmail(username)
+   let error = validateEmail(email)
    if (error) return error
 
    error = validateUsername(username)

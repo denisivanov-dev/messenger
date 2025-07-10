@@ -121,20 +121,4 @@ const onForgotPassword = () => {
 const onGoToRegister = () => {
 	router.push('/register')
 }
-
-// onMounted(async () => {
-// 	try {
-// 		const response = await autoLoginApi()
-// 		console.info(response.message)
-// 		if (response?.message === 'success' && response?.accessToken) {
-// 			store.setAccessToken(response.accessToken)
-// 			router.push('/global-chat')
-// 		}
-// 	} catch (error) {
-// 		const status = error.response?.status
-// 		const detail = error.response?.data?.detail
-		
-// 		console.info(status, detail)
-// 	}
-// })
 </script>

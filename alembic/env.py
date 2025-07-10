@@ -25,6 +25,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from backend_python.database import Base
 import backend_python.auth.models 
+import backend_python.chat.models
 
 target_metadata = Base.metadata
 

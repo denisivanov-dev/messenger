@@ -7,6 +7,7 @@ def set_refresh_cookie(response: Response, token: str):
         httponly=True,
         secure=False,  # не забудь поставить True на проде
         samesite="Lax",
+        # samesite="None",
         max_age=7 * 24 * 60 * 60
     )
 
