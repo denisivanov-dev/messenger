@@ -63,6 +63,7 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
+		log.Printf("RECEIVED: %+v", initMsg)
 		switch initMsg.Type {
 		case "init_global":
 			roomID := "1"
@@ -91,6 +92,56 @@ func (c *Client) ReadPump() {
 				"chat_id":  roomID,
 			}
 
+			out, err := json.Marshal(typingPayload)
+			if err != nil {
+				log.Printf("typing marshal error: %v", err)
+				break
+			}
+
+			c.Hub.Broadcast <- RoomMessage{
+				RoomID: roomID,
+				Data:   out,
+			}
+			continue
+
+		case "delete_message":
+			roomID := "1"
+			if initMsg.ChatType == "private" {
+				roomID = utils.GeneratePrivateChatKey(c.UserID, initMsg.ReceiverID)
+			}
+
+			c.joinRoomIfNotJoined(roomID)
+
+			redisKey := "chat:history:" + roomID
+			ctx := context.Background()
+
+			msgs, err := c.RDB.LRange(ctx, redisKey, 0, -1).Result()
+			if err != nil {
+				log.Printf("redis lrange error: %v", err)
+				break
+			}
+
+			for _, raw := range msgs {
+				var m map[string]any
+				if err := json.Unmarshal([]byte(raw), &m); err != nil {
+					continue
+				}
+
+				if mid, ok := m["message_id"].(string); ok && mid == initMsg.MessageID {
+					_, err := c.RDB.LRem(ctx, redisKey, 1, raw).Result()
+					if err != nil {
+						log.Printf("redis lrem error: %v", err)
+					}
+					break
+				}
+			}
+
+			typingPayload := map[string]any{
+				"type":     "message_deleted",
+				"message_id": initMsg.MessageID,
+				"chat_id":  roomID,
+			}
+			log.Printf(initMsg.MessageID)
 			out, err := json.Marshal(typingPayload)
 			if err != nil {
 				log.Printf("typing marshal error: %v", err)

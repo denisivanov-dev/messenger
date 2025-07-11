@@ -64,6 +64,12 @@ export const useChatStore = defineStore('chat', () => {
         return
       }
 
+      if (msg.type === 'message_deleted') {
+        console.info(2)
+        messages.value = messages.value.filter(m => m.message_id !== msg.message_id)
+        return
+      }
+
       typingUser.value = null
       messages.value.push(msg)
       shouldScroll.value = isNearBottom()
@@ -131,7 +137,9 @@ export const useChatStore = defineStore('chat', () => {
       messages.value = []
       const response = await startPrivateChat(targetId)
       receiverID.value = targetId
+      localStorage.setItem('receiverId', targetId)
       console.info(response)
+      console.info(receiverID.value)
       messages.value = response.messages
       shouldScroll.value = true
       return response.success
@@ -139,6 +147,16 @@ export const useChatStore = defineStore('chat', () => {
       console.error('openOrCreatePrivateChat error:', err)
       throw err
     }
+  }
+
+  function deleteMessage(message) {
+    console.info(1)
+    sendMessage({
+      type: 'delete_message',
+      message_id: message.message_id,
+      receiver_id: receiverID.value,
+      chat_type: chatType.value
+    })
   }
 
   return {
@@ -162,6 +180,7 @@ export const useChatStore = defineStore('chat', () => {
     sendTyping,
     setTyping,
     fetchUsers,
-    openOrCreatePrivateChat
+    openOrCreatePrivateChat,
+    deleteMessage
   }
 })

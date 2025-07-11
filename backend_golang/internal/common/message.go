@@ -6,6 +6,7 @@ type IncomingMessage struct {
 	ChatType   string `json:"chat_type"`
 	Text       string `json:"text"`
 	Timestamp  int64  `json:"timestamp"`
+	MessageID  string `json:"message_id"`
 }
 
 type OutgoingMessage struct {
