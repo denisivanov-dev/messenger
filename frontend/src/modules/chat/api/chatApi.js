@@ -37,7 +37,7 @@ axiosInstance.interceptors.request.use(
 // )
 
 let socket = null
-export function connect(token, onMessage) {
+export function connect(token, onMessage, mode = 'global', receiverId = null) {
   if (!token) {
     console.error('WebSocket connection aborted: no token provided')
     return
@@ -46,19 +46,22 @@ export function connect(token, onMessage) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.close(1000, 'Reconnecting')
   }
-  
+
   socket = new WebSocket(`ws://localhost:8080/ws?token=${token}`)
-  // socket = new WebSocket(`wss://k3ch20c2-8080.euw.devtunnels.ms/ws?token=${token}`)
 
   socket.onopen = () => {
     console.log('WebSocket connected')
 
-    socket.send(
-      JSON.stringify({
-        type: 'init_global'
-      })
-    )
+    if (mode === 'global') {
+      socket.send(JSON.stringify({ type: 'init_global' }))
+    } else if (mode === 'private' && receiverId) {
+      socket.send(JSON.stringify({
+        type:        'init_private',
+        receiver_id: receiverId
+      }))
+    }
   }
+
   socket.onmessage = event => onMessage(JSON.parse(event.data))
   socket.onclose = () => console.log('WebSocket disconnected')
   socket.onerror = err => console.error('WebSocket error', err)
@@ -86,10 +89,10 @@ export async function startPrivateChat(targetId) {
     target_id: targetId
   })
 
-  sendMessage({
-    type:        "init_private",
-    receiver_id: targetId
-  })
+  // sendMessage({
+  //   type:        "init_private",
+  //   receiver_id: targetId
+  // })
 
   return response.data
 }

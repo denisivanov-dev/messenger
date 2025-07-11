@@ -17,28 +17,17 @@
 </template>
 
 <script setup>
-import { onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import SideBarWindow from '../components/ui/sideBarWindow.vue'
 import ChatWindow from '../components/ui/chatWindow/chatWindow.vue'
 import MessageUserInput from '../components/ui/chatWindow/messageUserInput.vue'
 import UserListWindow from '../components/ui/userList/userListWindow.vue'
 import { useChatStore } from '../store/chatStore'
-import { useAuthStore } from '../../auth/store/authStore'
 
-const authStore = useAuthStore()
 const chatStore = useChatStore()
 
 onMounted(() => {
-  watch(
-    () => authStore.getAccessToken,
-    async token => {
-      if (token) {
-        chatStore.startChat(token)
-        chatStore.fetchUsers()
-      }
-    },
-    { immediate: true }
-  )
+  chatStore.setChatModeGlobal()
+  chatStore.shouldScroll = true
 })
 </script>
-

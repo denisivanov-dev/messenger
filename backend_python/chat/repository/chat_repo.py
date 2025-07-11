@@ -3,10 +3,25 @@ from backend_python.chat.models import Chat, ChatParticipant, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from sqlalchemy.orm import selectinload, selectinload
+import json
+import redis.asyncio as redis
 
 from backend_python.chat.utils import user_utils, message_utils
 
+redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+
 async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: int):
+    chat_key = user_utils.generate_private_chat_key(user1_id, user2_id)
+    redis_queue_key = f"chat:history:{chat_key}"
+
+    raw_messages = await redis_client.lrange(redis_queue_key, 0, -1)
+    if raw_messages:
+        messages_dto = [json.loads(m) for m in raw_messages]
+        query = select(Chat).where(Chat.chat_key == chat_key)
+        result = await db.execute(query)
+        chat = result.scalars().first()
+        return chat, messages_dto
+
     query = (
         select(Chat)
         .join(ChatParticipant)
@@ -30,10 +45,14 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
         messages_result = await db.execute(messages_query)
         messages = messages_result.scalars().all()
         messages_dto = [message_utils.orm_to_dto(msg=m, receiver_id=user2_id) for m in messages]
-        
-        return chat, messages_dto
 
-    chat_key = user_utils.generate_private_chat_key(user1_id, user2_id)
+        if messages_dto:
+            redis_pipe = redis_client.pipeline()
+            redis_pipe.rpush(redis_queue_key, *[json.dumps(m) for m in messages_dto])
+            redis_pipe.expire(redis_queue_key, 3600)
+            await redis_pipe.execute()
+
+        return chat, messages_dto
 
     new_chat = Chat(type='private', title=None, created_at=datetime.utcnow(), chat_key=chat_key)
     db.add(new_chat)
