@@ -67,9 +67,9 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
 
     return new_chat, []
 
-async def get_private_chat_queues(db: AsyncSession) -> list[str]:
+async def get_private_chat_keys(db: AsyncSession) -> list[str]:
     query = select(Chat.chat_key).where(Chat.type == "private")
     result = await db.execute(query)
     chat_keys = result.scalars().all()
 
-    return [f"to_save:private:{key}" for key in chat_keys if key]
+    return [key for key in chat_keys if key]

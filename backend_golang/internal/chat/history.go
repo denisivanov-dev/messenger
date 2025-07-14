@@ -12,14 +12,16 @@ import (
 )
 
 func SaveMessageToCache(rdb *rds.Client, msg common.OutgoingMessage) {
-	var chatKey string
+	var chatKey, queueKey string
+
 	if msg.Type == "private" {
 		chatKey = utils.GeneratePrivateChatKey(msg.UserID, msg.ReceiverID)
-		msg.ChatID = chatKey
+		queueKey = "to_save:private:" + chatKey
 	} else {
 		chatKey = "1"
-		msg.ChatID = chatKey
+		queueKey = "to_save:global"
 	}
+	msg.ChatID = chatKey
 
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -28,20 +30,23 @@ func SaveMessageToCache(rdb *rds.Client, msg common.OutgoingMessage) {
 	}
 
 	historyKey := "chat:history:" + chatKey
-	queueKey := "to_save:" + msg.Type + ":" + chatKey
 
 	redis.RPush(rdb, historyKey, data)
 	redis.LTrim(rdb, historyKey, -1000, -1)
 	redis.RPush(rdb, queueKey, data)
 }
 
-func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID string) bool {
+func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID string) *common.MessageDeleted {
 	key := "chat:history:" + chatID
+	queue := "to_delete:global"
+	if chatID != "1" {
+		queue = "to_delete:private:" + chatID
+	}
 
 	vals, err := redis.LRange(rdb, key, 0, -1)
 	if err != nil {
 		log.Printf("redis lrange error: %v", err)
-		return false
+		return nil
 	}
 
 	for _, raw := range vals {
@@ -49,14 +54,28 @@ func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID string) bo
 		if err := json.Unmarshal([]byte(raw), &msg); err != nil {
 			continue
 		}
-		if msg.MessageID == messageID {
-			if _, err := rdb.LRem(context.Background(), key, 1, raw).Result(); err != nil {
-				log.Printf("redis lrem error: %v", err)
-			}
-			return true
+		if msg.MessageID != messageID {
+			continue
 		}
+
+		if _, err := rdb.LRem(context.Background(), key, 1, raw).Result(); err != nil {
+			log.Printf("redis lrem error: %v", err)
+		}
+
+		payload := &common.MessageDeleted{
+			Type:      "message_deleted",
+			MessageID: msg.MessageID,
+			ChatID: chatID,
+		}
+
+		if data, err := json.Marshal(payload); err == nil {
+			redis.RPush(rdb, queue, data)
+		}
+
+		return payload
 	}
-	return false
+
+	return nil
 }
 
 func LoadMessageHistory(rdb *rds.Client, chatID string, limit int64) ([]common.OutgoingMessage, error) {

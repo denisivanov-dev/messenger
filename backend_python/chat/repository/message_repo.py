@@ -1,7 +1,7 @@
 from datetime import datetime
 from backend_python.chat.models import Chat, ChatParticipant, Message
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 import redis.asyncio as redis
 
 redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
@@ -16,7 +16,7 @@ async def save_message_to_global_chat(
 ):
     msg = Message(
         id=message_id,
-        chat_id=1,  # глобальный чат — id всегда 1
+        chat_id=1,
         sender_id=user_id,
         content=text,
         created_at=datetime.fromtimestamp(timestamp_ms / 1000.0)
@@ -48,6 +48,32 @@ async def save_private_message(
     )
 
     db.add(msg)
+    await db.commit()
+
+async def delete_global_message(
+    db: AsyncSession,
+    *,
+    message_id: str
+):
+    await db.execute(
+        delete(Message).where(Message.id == message_id, Message.chat_id == 1)
+    )
+    await db.commit()
+
+async def delete_private_message(
+    db: AsyncSession,
+    *,
+    chat_key: str,
+    message_id: str
+):
+    chat_id = await redis_client.get(f"chat_id:{chat_key}")
+    if not chat_id:
+        chat_id = await db.scalar(select(Chat.id).where(Chat.chat_key == chat_key))
+        await redis_client.set(f"chat_id:{chat_key}", chat_id)
+
+    await db.execute(
+        delete(Message).where(Message.id == message_id, Message.chat_id == int(chat_id))
+    )
     await db.commit()
 
 async def fetch_messages_by_chat_id(

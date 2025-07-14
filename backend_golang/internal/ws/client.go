@@ -41,7 +41,6 @@ func (c *Client) ReadPump() {
 			}
 		}()
 		
-		// Notify others that user went offline
 		c.Hub.Broadcast <- RoomMessage{
 			RoomID: systemRoom,
 			Data:   online.BuildStatusMessage(c.UserID, common.Offline),
@@ -87,7 +86,7 @@ func (c *Client) ReadPump() {
 			c.joinRoomIfNotJoined(roomID)
 			log.Printf("joined room %s", roomID)
 			c.sendHistory(roomID, 50)
-			
+
 			continue
 
 		case "typing":
@@ -100,24 +99,20 @@ func (c *Client) ReadPump() {
 				Username: c.Username,
 				ChatID:   roomID,
 			}
-			c.broadcastJSON(roomID, payload)
+		 	c.broadcastJSON(roomID, payload)
 			continue
 
 		case "delete_message":
 			roomID := c.getRoomID(initMsg.ChatType, initMsg.ReceiverID)
 			c.joinRoomIfNotJoined(roomID)
 
-			if chat.DeleteMessageFromRedisHistory(c.RDB, roomID, initMsg.MessageID) {
-				payload := common.MessageDeleted{
-					Type:      "message_deleted",
-					MessageID: initMsg.MessageID,
-					ChatID:    roomID,
-				}
-				c.broadcastJSON(roomID, payload)
+			if deleted := chat.DeleteMessageFromRedisHistory(c.RDB, roomID, initMsg.MessageID); deleted != nil {
+				c.broadcastJSON(roomID, deleted)
 			}
 			continue
 		}
 
+		chatID := utils.GeneratePrivateChatKey(c.UserID, initMsg.ReceiverID)
 		chatID, outBytes, ok := chat.HandleIncoming(raw, c.UserID, c.Username, c.RDB)
 		if !ok {
 			continue
