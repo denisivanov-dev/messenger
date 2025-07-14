@@ -2,25 +2,77 @@ package chat
 
 import (
 	"encoding/json"
+	"log"
+	"context"
 
-	"messenger/backend_golang/redis"
 	rds "github.com/redis/go-redis/v9"
+	"messenger/backend_golang/internal/common"
+	"messenger/backend_golang/internal/utils"
+	"messenger/backend_golang/redis"
 )
 
-func LoadHistoryJSON(rdb *rds.Client, chatID string, limit int) ([][]byte, error) {
-	msgs, err := redis.LoadChatHistory(rdb, chatID, int64(limit))
+func SaveMessageToCache(rdb *rds.Client, msg common.OutgoingMessage) {
+	var chatKey string
+	if msg.Type == "private" {
+		chatKey = utils.GeneratePrivateChatKey(msg.UserID, msg.ReceiverID)
+		msg.ChatID = chatKey
+	} else {
+		chatKey = "1"
+		msg.ChatID = chatKey
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("marshal error: %v", err)
+		return
+	}
+
+	historyKey := "chat:history:" + chatKey
+	queueKey := "to_save:" + msg.Type + ":" + chatKey
+
+	redis.RPush(rdb, historyKey, data)
+	redis.LTrim(rdb, historyKey, -1000, -1)
+	redis.RPush(rdb, queueKey, data)
+}
+
+func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID string) bool {
+	key := "chat:history:" + chatID
+
+	vals, err := redis.LRange(rdb, key, 0, -1)
+	if err != nil {
+		log.Printf("redis lrange error: %v", err)
+		return false
+	}
+
+	for _, raw := range vals {
+		var msg common.OutgoingMessage
+		if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+			continue
+		}
+		if msg.MessageID == messageID {
+			if _, err := rdb.LRem(context.Background(), key, 1, raw).Result(); err != nil {
+				log.Printf("redis lrem error: %v", err)
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func LoadMessageHistory(rdb *rds.Client, chatID string, limit int64) ([]common.OutgoingMessage, error) {
+	vals, err := redis.LRange(rdb, "chat:history:"+chatID, -limit, -1)
 	if err != nil {
 		return nil, err
 	}
 
-	out := make([][]byte, 0, len(msgs))
-	for _, m := range msgs {
-		b, err := json.Marshal(m)
-		if err != nil {
+	msgs := make([]common.OutgoingMessage, 0, len(vals))
+	for _, v := range vals {
+		var m common.OutgoingMessage
+		if err := json.Unmarshal([]byte(v), &m); err != nil {
+			log.Printf("unmarshal: %v", err)
 			continue
 		}
-		out = append(out, b)
+		msgs = append(msgs, m)
 	}
-	
-	return out, nil
-} 
+	return msgs, nil
+}

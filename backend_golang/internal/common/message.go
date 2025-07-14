@@ -19,3 +19,16 @@ type OutgoingMessage struct {
 	ReceiverID string `json:"receiver_id"` 
 	ChatID     string `json:"chat_id"`     
 }
+
+type TypingMessage struct {
+	Type     string `json:"type"`
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	ChatID   string `json:"chat_id"`
+}
+
+type MessageDeleted struct {
+	Type      string `json:"type"`
+	MessageID string `json:"message_id"`
+	ChatID    string `json:"chat_id"`
+}

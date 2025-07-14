@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/redis/go-redis/v9"
-	appredis "messenger/backend_golang/redis"
 )
 
 func HandleIncoming(raw []byte, userID, username string, rdb *redis.Client) (string, []byte, bool) {
@@ -21,7 +20,7 @@ func HandleIncoming(raw []byte, userID, username string, rdb *redis.Client) (str
 		return "", nil, false
 	}
 
-	go appredis.SaveToRedis(rdb, outMsg)
+	go SaveMessageToCache(rdb, outMsg)
 
 	outBytes, err := json.Marshal(outMsg)
 	if err != nil {

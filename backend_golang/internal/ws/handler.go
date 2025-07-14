@@ -52,15 +52,7 @@ func ServeWS(hub *Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) 
 		RoomID: systemRoom,
 		Data:   online.BuildStatusMessage(userID, common.Online),
 	}
-
-	// if history, err := chat.LoadHistoryJSON(rdb, "1", 50); err == nil {
-	// 	for _, msg := range history {
-	// 		client.Send <- msg
-	// 	}
-	// } else {
-	// 	log.Printf("chat.LoadHistoryJSON: %v", err)
-	// }
-
+	
 	go client.WritePump()
 	go client.ReadPump()
 }
