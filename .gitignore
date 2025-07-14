@@ -1,4 +1,4 @@
-# Logs
+# === LOG FILES ===
 logs/
 *.log
 npm-debug.log*
@@ -7,10 +7,16 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependency directories
+# === DEPENDENCIES ===
 node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
 
-# Build output
+# === BUILD / DIST ===
 dist/
 dist-ssr/
 .vite/
@@ -18,42 +24,48 @@ dist-ssr/
 .parcel-cache/
 coverage/
 
-# Local overrides
-*.local
-
-# Environment files
+# === ENVIRONMENT FILES ===
 .env
 .env.*
 !.env.example
-
-# Python
-__pycache__/
-__pycache__
-*.py[cod]
-*.pyo
-*.pyd
-*.sqlite3
-.venv/
-venv/
-data
-validation_data
+alembic.ini
 backend_python/config.py
 
-# Editor directories and files
-.vscode/*
+# === DATABASE / DATA ===
+*.sqlite3
+data/
+validation_data/
+
+# === DOCKER ===
+*.pid
+*.sock
+
+# === TEMP FILES / MISC ===
+*.tmp
+*.swp
+*.swo
+*.bak
+*.orig
+*.cls
+tmp/
+
+# === IDE / SYSTEM FILES ===
+.vscode/
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-*.bak
-*.tmp
-*.swp
-
-# System-specific
 Thumbs.db
 ehthumbs.db
+
+# === GO ===
+*.exe
+*.test
+*.out
+*.mod
+*.sum
+bin/
+
+# === PYTHON MYPY / CACHE ===
+.mypy_cache/
+.pytest_cache/
