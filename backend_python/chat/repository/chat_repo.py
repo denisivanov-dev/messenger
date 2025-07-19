@@ -39,7 +39,10 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
         messages_query = (
             select(Message)
             .options(selectinload(Message.sender))
-            .where(Message.chat_id == chat.id)
+            .where(
+                Message.chat_id == chat.id,
+                Message.deleted == False
+            )
             .order_by(Message.created_at)
         )
         messages_result = await db.execute(messages_query)

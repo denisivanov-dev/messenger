@@ -53,10 +53,14 @@ export function connect(token, onMessage, mode = 'global', receiverId = null) {
     console.log('WebSocket connected')
 
     if (mode === 'global') {
-      socket.send(JSON.stringify({ type: 'init_global' }))
+      socket.send(JSON.stringify({
+        type: 'init_global',
+        chat_type: 'global'
+      }))
     } else if (mode === 'private' && receiverId) {
       socket.send(JSON.stringify({
-        type:        'init_private',
+        type: 'init_private',
+        chat_type: 'private',
         receiver_id: receiverId
       }))
     }

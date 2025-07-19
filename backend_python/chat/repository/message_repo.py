@@ -1,7 +1,7 @@
 from datetime import datetime
-from backend_python.chat.models import Chat, ChatParticipant, Message
+from backend_python.chat.models import Chat, ChatParticipant, Message, MessageEdit
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, update
 import redis.asyncio as redis
 
 redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
@@ -56,7 +56,9 @@ async def delete_global_message(
     message_id: str
 ):
     await db.execute(
-        delete(Message).where(Message.id == message_id, Message.chat_id == 1)
+        update(Message)
+        .where(Message.id == message_id, Message.chat_id == 1)
+        .values(deleted=True)
     )
     await db.commit()
 
@@ -72,8 +74,93 @@ async def delete_private_message(
         await redis_client.set(f"chat_id:{chat_key}", chat_id)
 
     await db.execute(
-        delete(Message).where(Message.id == message_id, Message.chat_id == int(chat_id))
+        update(Message)
+        .where(Message.id == message_id, Message.chat_id == int(chat_id))
+        .values(deleted=True)
     )
+    await db.commit()
+
+async def edit_global_message(
+    db: AsyncSession,
+    message_id: str,
+    new_text: str
+):
+    chat_id = 1
+
+    result = await db.execute(
+        select(Message.content).where(
+            Message.id == message_id,
+            Message.chat_id == chat_id
+        )
+    )
+    old_content = result.scalar_one_or_none()
+
+    if old_content is None:
+        return
+
+    edit_entry = MessageEdit(
+        message_id=message_id,
+        old_text=old_content,
+        edited_at=datetime.utcnow()
+    )
+    db.add(edit_entry)
+
+    await db.execute(
+        update(Message)
+        .where(Message.id == message_id, Message.chat_id == chat_id)
+        .values(
+            is_edited=True,
+            edited_at=datetime.utcnow(),
+            content=new_text
+        )
+    )
+
+    await db.commit()
+
+async def edit_private_message(
+    db: AsyncSession,
+    *,
+    chat_key: str,
+    message_id: str,
+    new_text: str
+):
+    chat_id = await redis_client.get(f"chat_id:{chat_key}")
+    if not chat_id:
+        chat_id = await db.scalar(
+            select(Chat.id).where(Chat.chat_key == chat_key)
+        )
+        await redis_client.set(f"chat_id:{chat_key}", chat_id)
+
+    chat_id = int(chat_id)
+
+    result = await db.execute(
+        select(Message.content).where(
+            Message.id == message_id,
+            Message.chat_id == chat_id
+        )
+    )
+    old_content = result.scalar_one_or_none()
+
+    if old_content is None:
+        return
+
+    edit_entry = MessageEdit(
+        message_id=message_id,
+        old_text=old_content,
+        edited_at=datetime.utcnow()
+    )
+    db.add(edit_entry)
+
+    await db.execute(
+        update(Message)
+        .where(Message.id == message_id, Message.chat_id == chat_id)
+        .values(
+            is_edited=True,
+            edited_at=datetime.utcnow(),
+            content=new_text
+        )
+    )
+
     await db.commit()
 
 async def fetch_messages_by_chat_id(

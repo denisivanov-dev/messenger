@@ -20,7 +20,8 @@ func HandleIncoming(raw []byte, userID, username string, rdb *redis.Client) (str
 		return "", nil, false
 	}
 
-	go SaveMessageToCache(rdb, outMsg)
+	roomID := outMsg.ChatID
+	go SaveMessageToRedisHistory(rdb, roomID, outMsg)
 
 	outBytes, err := json.Marshal(outMsg)
 	if err != nil {
@@ -28,5 +29,5 @@ func HandleIncoming(raw []byte, userID, username string, rdb *redis.Client) (str
 		return "", nil, false
 	}
 
-	return outMsg.ChatID, outBytes, true
+	return roomID, outBytes, true
 }

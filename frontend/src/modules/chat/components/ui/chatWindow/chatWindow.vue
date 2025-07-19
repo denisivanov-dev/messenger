@@ -8,6 +8,7 @@
       v-for="msg in messages"
       :key="msg.timestamp"
       :message="msg"
+      @edit-message="emit('edit-message', $event)"
     />
 
     <!-- индикатор печати -->
@@ -30,6 +31,8 @@ const chatStore = useChatStore()
 
 const messages = computed(() => chatStore.messages)
 const typingUser = computed(() => chatStore.typingUser)
+
+const emit = defineEmits(['edit-message'])
 
 watch(() => chatStore.shouldScroll, async (val) => {
   if (val) {

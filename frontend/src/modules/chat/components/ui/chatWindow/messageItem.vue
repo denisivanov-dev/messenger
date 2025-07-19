@@ -2,6 +2,11 @@
   <div
     class="relative group px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-50 transition"
   >
+    <!-- Индикатор "изменено" и дата -->
+    <div v-if="props.message.edited_at" class="absolute top-0 right-0 mt-1 mr-2 text-[10px] text-gray-400">
+      изменено • {{ formattedEditDate }}
+    </div>
+
     <!-- Заголовок: имя и время -->
     <div class="mb-1 text-xs text-gray-500">
       {{ props.message.username }} • {{ formattedDate }}
@@ -31,7 +36,12 @@
         <PinIcon class="w-4 h-4" />
       </button>
 
-      <button @click="remove" title="Удалить" class="text-red-600 hover:text-red-800">
+      <button
+        v-if="isMyMessage"
+        @click="remove"
+        title="Удалить"
+        class="text-red-600 hover:text-red-800"
+      >
         <TrashIcon class="w-4 h-4" />
       </button>
     </div>
@@ -39,9 +49,12 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { ReplyIcon, EditIcon, PinIcon, TrashIcon } from 'lucide-vue-next'
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
+
+const emit = defineEmits(['edit-message'])
 
 const props = defineProps({
   message: {
@@ -58,6 +71,17 @@ const formattedDate = new Date(props.message.timestamp).toLocaleString('ru-RU', 
   minute: '2-digit'
 })
 
+const formattedEditDate = computed(() => {
+  if (!props.message.edited_at) return ''
+  return new Date(props.message.edited_at).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+})
+
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const isMyMessage = props.message.user_id == authStore.getUserId
@@ -68,6 +92,7 @@ const reply = () => {
 
 const edit = () => {
   console.log("Редактировать:", props.message)
+  emit('edit-message', props.message)
 }
 
 const pin = () => {
@@ -76,8 +101,6 @@ const pin = () => {
 
 const remove = () => {
   console.log("Удалить:", props.message)
-  console.log("chatStore:", chatStore)
-  console.log("typeof chatStore.deleteMessage:", typeof chatStore.deleteMessage)
   chatStore.deleteMessage(props.message)
 }
 </script>

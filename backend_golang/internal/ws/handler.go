@@ -3,6 +3,7 @@ package ws
 import (
 	"log"
 	"net/http"
+	"sync"
 
 	rds "github.com/redis/go-redis/v9"
 
@@ -32,6 +33,7 @@ func ServeWS(hub *Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) 
 		Username: username,
 		RDB:      rdb,
 		Rooms:    make(map[string]struct{}, len(chatIDs)+1),
+		once:     sync.Once{},
 	}
 
 	// Register user in all their chat rooms
@@ -52,7 +54,7 @@ func ServeWS(hub *Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) 
 		RoomID: systemRoom,
 		Data:   online.BuildStatusMessage(userID, common.Online),
 	}
-	
+
 	go client.WritePump()
 	go client.ReadPump()
 }

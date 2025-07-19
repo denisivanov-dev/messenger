@@ -30,6 +30,7 @@ async def preload_global_chat_history():
             "username": usernames_map.get(message.sender_id),
             "type": "global",
             "receiver_id": "",
+            "edited_at": int(message.edited_at.timestamp() * 1000) if message.is_edited and message.edited_at else 0,
         }
         values.append(json.dumps(msg_dict))
 

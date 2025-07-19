@@ -1,14 +1,15 @@
 <template>
   <div class="flex justify-center items-center w-screen h-screen">
-    <div class="flex flex-col flex-grow max-w-4xl w-full px-4 gap-6">
-      <ChatWindow />
-      <MessageUserInput />
-    </div>
+    <!-- Центр: чат + инпут -->
+      <div class="flex flex-col items-center flex-grow">
+        <ChatWindow @edit-message="handleEditMessage" />
+        <MessageUserInput ref="msgInputRef" />
+      </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import ChatWindow from '../components/ui/chatWindow/chatWindow.vue'
 import MessageUserInput from '../components/ui/chatWindow/messageUserInput.vue'
 import { useChatStore } from '../store/chatStore'
@@ -16,6 +17,7 @@ import { useRouter } from 'vue-router'
 
 const chatStore = useChatStore()
 const router = useRouter()
+const msgInputRef = ref(null)
 
 onMounted(() => {
   const receiverId = chatStore.receiverId || localStorage.getItem('receiverId')
@@ -29,4 +31,8 @@ onMounted(() => {
 
   chatStore.shouldScroll = true
 })
+
+function handleEditMessage(message) {
+  msgInputRef.value?.startEdit(message)
+}
 </script>

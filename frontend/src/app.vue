@@ -28,6 +28,7 @@ async function initAuthFlow () {
     chatStore.startChat(token, 'private', receiverId)
   } else {
     chatStore.setChatModeGlobal()
+    console.info('Global')
     chatStore.startChat(token, 'global')
   }
 

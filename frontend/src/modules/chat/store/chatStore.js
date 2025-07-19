@@ -24,8 +24,11 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
 
     localStorage.setItem('chatMode', 'global')
-    if (connected.value) {
-      sendMessage({ type: 'init_global' })
+     if (connected.value) {
+      sendMessage({
+        type: 'init_global',
+        chat_type: 'global'
+      })
     }
   }
 
@@ -39,6 +42,7 @@ export const useChatStore = defineStore('chat', () => {
     if (connected.value) {
       sendMessage({
         type: 'init_private',
+        chat_type: 'private',
         receiver_id: targetID
       })
     }
@@ -65,8 +69,18 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       if (msg.type === 'message_deleted') {
-        console.info(2)
         messages.value = messages.value.filter(m => m.message_id !== msg.message_id)
+        return
+      }
+
+      if (msg.type === 'message_edited') {
+        console.info('message_edited payload:', JSON.stringify(msg))
+        const edited = messages.value.find(m => m.message_id === msg.message_id)
+        if (edited) {
+          edited.text = msg.new_text
+          edited.timestamp = msg.edited_at
+          edited.edited_at = msg.edited_at
+        }
         return
       }
 
@@ -150,7 +164,6 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function deleteMessage(message) {
-    console.info(1)
     sendMessage({
       type: 'delete_message',
       message_id: message.message_id,
@@ -158,6 +171,17 @@ export const useChatStore = defineStore('chat', () => {
       chat_type: chatType.value
     })
   }
+
+  function editMessage(message, newText) {
+  console.info(newText)
+    sendMessage({
+    type: 'edit_message',
+    message_id: message.message_id,
+    new_text: newText,
+    receiver_id: receiverID.value,
+    chat_type: chatType.value
+  })
+}
 
   return {
     // state
@@ -181,6 +205,7 @@ export const useChatStore = defineStore('chat', () => {
     setTyping,
     fetchUsers,
     openOrCreatePrivateChat,
-    deleteMessage
+    deleteMessage,
+    editMessage
   }
 })

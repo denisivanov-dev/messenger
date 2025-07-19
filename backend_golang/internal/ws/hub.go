@@ -1,5 +1,9 @@
 package ws
 
+import (
+	"log"
+)
+
 const systemRoom = "sys"
 
 type RoomMessage struct {
@@ -37,20 +41,18 @@ func NewHub() *Hub {
 
 func (h *Hub) Run() {
 	safeSend := func(c *Client, data []byte) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in safeSend: %v", r)
+			}
+		}()
 		select {
 		case c.Send <- data:
 		default:
 			// Disconnect unresponsive client
-			close(c.Send)
-			delete(h.clients, c)
-			for rid := range h.rooms {
-				if h.rooms[rid] != nil {
-					delete(h.rooms[rid], c)
-					if len(h.rooms[rid]) == 0 {
-						delete(h.rooms, rid)
-					}
-				}
-			}
+			c.once.Do(func() {
+				h.Unregister <- c
+			})
 		}
 	}
 
@@ -95,6 +97,10 @@ func (h *Hub) Run() {
 			}
 			if set, ok := h.rooms[msg.RoomID]; ok {
 				for c := range set {
+					if _, alive := h.clients[c]; !alive {
+						delete(set, c)
+						continue
+					}
 					safeSend(c, msg.Data)
 				}
 			}

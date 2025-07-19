@@ -41,13 +41,16 @@ class ChatParticipant(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id        = Column(String, primary_key=True)   
+    id        = Column(String, primary_key=True)
     chat_id   = Column(ForeignKey("chats.id",  ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(ForeignKey("users.id",  ondelete="SET NULL"), nullable=True,  index=True)
+    sender_id = Column(ForeignKey("users.id",  ondelete="SET NULL"), nullable=True, index=True)
 
-    content   = Column(Text,    nullable=False)
-    is_edited = Column(Boolean, default=False)
-    deleted   = Column(Boolean, default=False)
+    content    = Column(Text, nullable=False)
+    is_edited  = Column(Boolean, default=False)
+    deleted    = Column(Boolean, default=False)
+    is_pinned  = Column(Boolean, default=False)
+
+    reply_to_id = Column(String, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     edited_at  = Column(DateTime(timezone=True), nullable=True)
@@ -58,3 +61,14 @@ class Message(Base):
 
     chat   = relationship("Chat", back_populates="messages")
     sender = relationship("User")
+    reply_to = relationship("Message", remote_side=[id], post_update=True)
+
+class MessageEdit(Base):
+    __tablename__ = "message_edits"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    old_text = Column(Text, nullable=False)
+    edited_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    message = relationship("Message", backref="edits")
