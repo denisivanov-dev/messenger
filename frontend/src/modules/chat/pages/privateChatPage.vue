@@ -2,7 +2,10 @@
   <div class="flex justify-center items-center w-screen h-screen">
     <!-- Центр: чат + инпут -->
       <div class="flex flex-col items-center flex-grow">
-        <ChatWindow @edit-message="handleEditMessage" />
+        <ChatWindow
+          @edit-message="handleEditMessage"
+          @reply-to-message="handleReplyMessage"
+        />
         <MessageUserInput ref="msgInputRef" />
       </div>
   </div>
@@ -34,5 +37,9 @@ onMounted(() => {
 
 function handleEditMessage(message) {
   msgInputRef.value?.startEdit(message)
+}
+
+function handleReplyMessage(message) {
+  msgInputRef.value?.startReply(message)
 }
 </script>

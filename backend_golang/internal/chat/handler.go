@@ -14,7 +14,7 @@ func HandleIncoming(raw []byte, userID, username string, rdb *redis.Client) (str
 	}
 
 	outMsg := BuildMessage(incMsg, userID, username)
-
+	
 	if outMsg.ChatID == "" {
 		log.Printf("empty ChatID in message, skipping: %+v", outMsg)
 		return "", nil, false
@@ -22,6 +22,8 @@ func HandleIncoming(raw []byte, userID, username string, rdb *redis.Client) (str
 
 	roomID := outMsg.ChatID
 	go SaveMessageToRedisHistory(rdb, roomID, outMsg)
+
+	log.Printf("outMsg: %+v", outMsg)
 
 	outBytes, err := json.Marshal(outMsg)
 	if err != nil {

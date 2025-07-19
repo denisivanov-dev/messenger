@@ -3,8 +3,11 @@ from backend_python.chat.models import Chat, ChatParticipant, Message, MessageEd
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 import redis.asyncio as redis
+from sqlalchemy.orm import aliased
 
 redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+
+ReplyMsg = aliased(Message)
 
 async def save_message_to_global_chat(
     db: AsyncSession,
@@ -170,12 +173,16 @@ async def fetch_messages_by_chat_id(
     offset: int = 0,
 ):
     query = (
-        select(Message)
+        select(
+            Message,
+            ReplyMsg.content.label("reply_to_text"),
+            ReplyMsg.username.label("reply_to_user"),
+        )
+        .outerjoin(ReplyMsg, Message.reply_to_id == ReplyMsg.id)
         .where(Message.chat_id == chat_id, Message.deleted.is_(False))
         .order_by(Message.created_at.asc())
         .limit(limit)
         .offset(offset)
     )
-    result = await db.execute(query )
-
-    return result.scalars().all()
+    result = await db.execute(query)
+    return result.all()

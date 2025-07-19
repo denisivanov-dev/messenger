@@ -1,15 +1,25 @@
 <template>
   <div
+    :id="`msg-${props.message.message_id}`"
     class="relative group px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-50 transition"
   >
     <!-- Индикатор "изменено" и дата -->
     <div v-if="props.message.edited_at" class="absolute top-0 right-0 mt-1 mr-2 text-[10px] text-gray-400">
       изменено • {{ formattedEditDate }}
     </div>
-
+    
     <!-- Заголовок: имя и время -->
     <div class="mb-1 text-xs text-gray-500">
       {{ props.message.username }} • {{ formattedDate }}
+    </div>
+
+    <!-- Ответ на сообщение -->
+    <div
+      v-if="props.message.reply_to"
+      class="mb-1 text-[11px] text-gray-500 border-l-2 border-blue-400 pl-2 cursor-pointer hover:text-blue-600"
+      @click="$emit('scroll-to-message', props.message.reply_to)"
+    >
+      ↩ {{ props.message.reply_to_user }}: {{ props.message.reply_to_text }}
     </div>
 
     <!-- Текст сообщения -->
@@ -54,7 +64,7 @@ import { ReplyIcon, EditIcon, PinIcon, TrashIcon } from 'lucide-vue-next'
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
 
-const emit = defineEmits(['edit-message'])
+const emit = defineEmits(['reply-to-message', 'edit-message', 'scroll-to-message'])
 
 const props = defineProps({
   message: {
@@ -88,6 +98,7 @@ const isMyMessage = props.message.user_id == authStore.getUserId
 
 const reply = () => {
   console.log("Ответить:", props.message)
+  emit('reply-to-message', props.message)
 }
 
 const edit = () => {

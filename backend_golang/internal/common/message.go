@@ -8,6 +8,9 @@ type IncomingMessage struct {
 	NewText    string `json:"new_text"`
 	Timestamp  int64  `json:"timestamp"`
 	MessageID  string `json:"message_id"`
+	ReplyTo    string `json:"reply_to"`
+	ReplyToText string `json:"reply_to_text"`
+	ReplyToUser string `json:"reply_to_user"`
 }  
 
 type OutgoingMessage struct {
@@ -19,7 +22,10 @@ type OutgoingMessage struct {
 	Type       string `json:"type"`      
 	ReceiverID string `json:"receiver_id"` 
 	ChatID     string `json:"chat_id"`   
-	EditedAt   int64  `json:"edited_at,omitempty"`  
+	EditedAt   int64  `json:"edited_at,omitempty"`
+	ReplyTo    string `json:"reply_to,omitempty"`
+	ReplyToText string `json:"reply_to_text,omitempty"`
+	ReplyToUser string `json:"reply_to_user,omitempty"`
 }
 
 type TypingMessage struct {

@@ -99,14 +99,21 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // --- MESSAGING ---
-  function send(text) {
+  function send(text, replyToMessage = null) {
     const msg = {
       text,
       timestamp: Date.now(),
       chat_type: chatType.value,
-      receiver_id: receiverID.value
+      receiver_id: receiverID.value,
     }
 
+    if (replyToMessage) {
+      msg.reply_to = replyToMessage.message_id
+      msg.reply_to_text = replyToMessage.text
+      msg.reply_to_user = replyToMessage.username
+    }
+    
+    console.info(msg.reply_to, msg.reply_to_text, msg.reply_to_user)
     sendMessage(msg)
     shouldScroll.value = true
   }

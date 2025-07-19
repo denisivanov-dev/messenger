@@ -1,8 +1,13 @@
 <template>
   <div class="mt-6 w-full max-w-[1300px]">
     <div v-if="isEditing" class="text-sm text-gray-600 mb-1">
-      ✏️ Вы редактируете сообщение
+      Вы редактируете сообщение "{{ editingMessage.text}}"
       <button @click="cancelEdit" class="ml-2 text-blue-600 hover:underline">Отменить • Esc</button>
+    </div>
+
+    <div v-if="isReplying" class="text-sm text-gray-600 mb-1">
+      Вы отвечаете на "{{ replyingMessage.text }}" от {{ replyingMessage.username }}
+      <button @click="cancelReply" class="ml-2 text-blue-600 hover:underline">Отменить • Esc</button>
     </div>
 
     <input
@@ -25,29 +30,41 @@ import { useChatStore } from '../../../store/chatStore'
 const text = ref('')
 const isEditing = ref(false)
 const editingMessage = ref(null)
-const inputRef = ref(null)
 
+const isReplying = ref(false)
+const replyingMessage = ref(null)
+
+const inputRef = ref(null)
 const chatStore = useChatStore()
 
 function send() {
   if (text.value.trim() === '') return
 
   if (isEditing.value && editingMessage.value) {
-    console.info(editingMessage.value)
-    console.info(text.value)
     chatStore.editMessage(editingMessage.value, text.value)
     cancelEdit()
   } else {
-    chatStore.send(text.value)
+    chatStore.send(text.value, replyingMessage.value)
+    cancelReply()
   }
 
   text.value = ''
 }
 
 function startEdit(msg) {
+  if (isReplying.value) cancelReply()
+  
   text.value = msg.text
   editingMessage.value = msg
   isEditing.value = true
+  nextTick(() => inputRef.value?.focus())
+}
+
+function startReply(msg) {
+  if (isEditing.value) cancelEdit()
+  
+  isReplying.value = true
+  replyingMessage.value = msg
   nextTick(() => inputRef.value?.focus())
 }
 
@@ -57,10 +74,16 @@ function cancelEdit() {
   isEditing.value = false
 }
 
+function cancelReply() {
+  replyingMessage.value = null
+  isReplying.value = false
+}
+
 function onEsc() {
-  if (isEditing.value) {
-    cancelEdit()
-  } else if (inputRef.value === document.activeElement) {
+  if (isEditing.value) cancelEdit()
+  if (isReplying.value) cancelReply()
+
+  if (inputRef.value === document.activeElement) {
     inputRef.value.blur()
   }
 }
@@ -82,5 +105,5 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', focusInputOnKeyPress)
 })
 
-defineExpose({ startEdit })
+defineExpose({ startEdit, startReply })
 </script>

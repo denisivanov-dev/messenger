@@ -9,6 +9,8 @@
       :key="msg.timestamp"
       :message="msg"
       @edit-message="emit('edit-message', $event)"
+      @reply-to-message="emit('reply-to-message', $event)" 
+      @scroll-to-message="scrollToMessage"
     />
 
     <!-- индикатор печати -->
@@ -32,7 +34,7 @@ const chatStore = useChatStore()
 const messages = computed(() => chatStore.messages)
 const typingUser = computed(() => chatStore.typingUser)
 
-const emit = defineEmits(['edit-message'])
+const emit = defineEmits(['reply-to-message', 'edit-message', 'scroll-to-message'])
 
 watch(() => chatStore.shouldScroll, async (val) => {
   if (val) {
@@ -56,6 +58,18 @@ watch(
   }
 )
 
+function scrollToMessage(messageID) {
+  const el = document.getElementById(`msg-${messageID}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('ring', 'ring-blue-400', 'transition')
+    setTimeout(() => {
+      el.classList.remove('ring', 'ring-blue-400')
+    }, 1000)
+  } else {
+    console.warn(`Сообщение msg-${messageID} не найдено`)
+  }
+}
 
 onMounted(async () => {
   await nextTick()

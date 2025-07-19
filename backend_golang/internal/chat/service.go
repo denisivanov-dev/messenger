@@ -45,5 +45,8 @@ func BuildMessage(in common.IncomingMessage, userID, username string) common.Out
         UserID:     userID,
         Type:       t,     
         ReceiverID: in.ReceiverID,
+        ReplyTo:    in.ReplyTo,
+        ReplyToText:   in.ReplyToText,
+        ReplyToUser:   in.ReplyToUser,
     }
 }

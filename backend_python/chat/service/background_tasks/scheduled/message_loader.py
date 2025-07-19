@@ -21,16 +21,19 @@ async def preload_global_chat_history():
         usernames_map = await fetch_usernames_map(db, messages)
 
     values = []
-    for message in messages:
+    for msg, reply_text, reply_user in messages:
         msg_dict = {
-            "message_id": message.id,
-            "user_id": str(message.sender_id),
-            "text": message.content,
-            "timestamp": int(message.created_at.timestamp() * 1000),
-            "username": usernames_map.get(message.sender_id),
+            "message_id": msg.id,
+            "user_id": str(msg.sender_id),
+            "text": msg.content,
+            "timestamp": int(msg.created_at.timestamp() * 1000),
+            "username": usernames_map.get(msg.sender_id),
             "type": "global",
             "receiver_id": "",
-            "edited_at": int(message.edited_at.timestamp() * 1000) if message.is_edited and message.edited_at else 0,
+            "edited_at": int(msg.edited_at.timestamp() * 1000) if msg.is_edited and msg.edited_at else 0,
+            "reply_to": msg.reply_to_id,
+            "reply_to_text": reply_text,
+            "reply_to_user": reply_user,
         }
         values.append(json.dumps(msg_dict))
 
