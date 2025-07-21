@@ -3,6 +3,8 @@ package ws
 import (
 	"encoding/json"
 	"log"
+	"fmt"
+	"context"
 
 	"messenger/backend_golang/internal/chat"
 	"messenger/backend_golang/internal/utils"
@@ -39,6 +41,33 @@ func (c *Client) getRoomID(chatType, receiverID string) string {
 	return "1"
 }
 
+func (c *Client) resolveRoomID(chatType, receiverID string) (string, bool) {
+	ctx := context.Background()
+
+	chatKey := c.getRoomID(chatType, receiverID)
+	if chatKey == "1" {
+		return "1", true
+	}
+
+	chatID, err := c.RDB.Get(ctx, fmt.Sprintf("chat_id:%s", chatKey)).Result()
+	if err != nil {
+		log.Printf("Redis GET chat_id:%s failed: %v", chatKey, err)
+		return "", false
+	}
+
+	ok, err := c.RDB.SIsMember(ctx, fmt.Sprintf("chat:%s:participants", chatID), c.UserID).Result()
+	if err != nil {
+		log.Printf("Redis SISMEMBER failed: %v", err)
+		return "", false
+	}
+	if !ok {
+		log.Printf("Access denied: user %s not in chat %s", c.UserID, chatID)
+		return "", false
+	}
+
+	return chatKey, true
+}
+
 func (c *Client) broadcastJSON(roomID string, payload any) {
 	out, err := json.Marshal(payload)
 	if err != nil {
@@ -62,4 +91,13 @@ func (c *Client) leaveAllExcept(allowedRoomIDs ...string) {
 			delete(c.Rooms, room)
 		}
 	}
+}
+
+func (c *Client) sendError(message string) {
+	payload := map[string]string{
+		"type":    "error",
+		"message": message,
+	}
+	out, _ := json.Marshal(payload)
+	c.Send <- out
 }

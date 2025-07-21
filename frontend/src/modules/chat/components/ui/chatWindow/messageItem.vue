@@ -9,8 +9,14 @@
     </div>
     
     <!-- Заголовок: имя и время -->
-    <div class="mb-1 text-xs text-gray-500">
-      {{ props.message.username }} • {{ formattedDate }}
+    <div
+      class="mb-1 text-xs flex items-center gap-1"
+      :class="props.message.pinned ? 'text-purple-800 bg-purple-100 px-1 py-0.5 rounded' : 'text-gray-500'"
+    >
+      <span>{{ props.message.username }} • {{ formattedDate }}</span>
+      <span v-if="props.message.pinned" class="flex items-center gap-1 text-xs">
+        📌 <span class="italic m-auto">Закреплено</span>
+      </span>
     </div>
 
     <!-- Ответ на сообщение -->
@@ -19,9 +25,9 @@
       class="mb-1 text-[11px] text-gray-500 border-l-2 border-blue-400 pl-2 cursor-pointer hover:text-blue-600"
       @click="$emit('scroll-to-message', props.message.reply_to)"
     >
-      ↩ {{ props.message.reply_to_user }}: {{ props.message.reply_to_text }}
+      ↩ {{ props.message.reply_to_user }}: 
+      <span class="italic text-gray-500">{{ repliedMessageText }}</span>
     </div>
-
     <!-- Текст сообщения -->
     <p class="text-sm text-gray-900">{{ props.message.text }}</p>
 
@@ -92,6 +98,15 @@ const formattedEditDate = computed(() => {
   })
 })
 
+const repliedMessageText = computed(() => {
+  const replied = chatStore.messages.find(m => m.message_id === props.message.reply_to)
+  if (!replied) return '[сообщение удалено]'
+  if (replied.text.trim() !== props.message.reply_to_text.trim()) {
+    return replied.text + ' (изменено)'
+  }
+  return replied.text
+})
+
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const isMyMessage = props.message.user_id == authStore.getUserId
@@ -108,6 +123,8 @@ const edit = () => {
 
 const pin = () => {
   console.log("Закрепить:", props.message)
+  const shouldPin = !props.message.pinned
+  chatStore.pinMessage(props.message, shouldPin)
 }
 
 const remove = () => {

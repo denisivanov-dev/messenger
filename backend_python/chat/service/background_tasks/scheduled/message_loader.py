@@ -34,6 +34,7 @@ async def preload_global_chat_history():
             "reply_to": msg.reply_to_id,
             "reply_to_text": reply_text,
             "reply_to_user": reply_user,
+            "pinned": msg.is_pinned,
         }
         values.append(json.dumps(msg_dict))
 

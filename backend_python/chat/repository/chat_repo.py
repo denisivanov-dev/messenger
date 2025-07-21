@@ -55,6 +55,9 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
             redis_pipe.expire(redis_queue_key, 3600)
             await redis_pipe.execute()
 
+        await redis_client.set(f"chat_id:{chat_key}", chat.id)
+        await redis_client.sadd(f"chat:{chat.id}:participants", user1_id, user2_id)
+
         return chat, messages_dto
 
     new_chat = Chat(type='private', title=None, created_at=datetime.utcnow(), chat_key=chat_key)
@@ -67,6 +70,9 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
     ]
     db.add_all(participants)
     await db.commit()
+
+    await redis_client.set(f"chat_id:{chat_key}", new_chat.id)
+    await redis_client.sadd(f"chat:{new_chat.id}:participants", user1_id, user2_id)
 
     return new_chat, []
 

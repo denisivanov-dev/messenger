@@ -84,6 +84,17 @@ export const useChatStore = defineStore('chat', () => {
         return
       }
 
+      if (msg.type === 'message_pinned') {
+        console.info('message_pinned payload:', JSON.stringify(msg))
+        const pinned = messages.value.find(m => m.message_id === msg.message_id)
+        if (pinned && msg.action === 'pin') {
+          pinned.pinned = true
+        } else {
+          pinned.pinned = false
+        }
+        return
+      }
+
       typingUser.value = null
       messages.value.push(msg)
       shouldScroll.value = isNearBottom()
@@ -101,7 +112,8 @@ export const useChatStore = defineStore('chat', () => {
   // --- MESSAGING ---
   function send(text, replyToMessage = null) {
     const msg = {
-      text,
+      type: 'send_message',
+      text: text.trim(),
       timestamp: Date.now(),
       chat_type: chatType.value,
       receiver_id: receiverID.value,
@@ -112,7 +124,7 @@ export const useChatStore = defineStore('chat', () => {
       msg.reply_to_text = replyToMessage.text
       msg.reply_to_user = replyToMessage.username
     }
-    
+
     console.info(msg.reply_to, msg.reply_to_text, msg.reply_to_user)
     sendMessage(msg)
     shouldScroll.value = true
@@ -180,15 +192,27 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function editMessage(message, newText) {
-  console.info(newText)
     sendMessage({
-    type: 'edit_message',
-    message_id: message.message_id,
-    new_text: newText,
-    receiver_id: receiverID.value,
-    chat_type: chatType.value
-  })
-}
+      type: 'edit_message',
+      message_id: message.message_id,
+      new_text: newText,
+      receiver_id: receiverID.value,
+      chat_type: chatType.value
+    })
+  }
+
+  function pinMessage(message, shouldPin = true) {
+    console.info(chatType.value)
+    
+    sendMessage({
+      type: 'pin_message',
+      message_id: message.message_id,
+      chat_id: message.chat_id,
+      action: shouldPin ? 'pin' : 'unpin',
+      receiver_id: receiverID.value,
+      chat_type: chatType.value
+    })
+  }
 
   return {
     // state
@@ -213,6 +237,7 @@ export const useChatStore = defineStore('chat', () => {
     fetchUsers,
     openOrCreatePrivateChat,
     deleteMessage,
-    editMessage
+    editMessage,
+    pinMessage
   }
 })

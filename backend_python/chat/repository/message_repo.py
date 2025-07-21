@@ -1,5 +1,5 @@
 from datetime import datetime
-from backend_python.chat.models import Chat, ChatParticipant, Message, MessageEdit
+from backend_python.chat.models import Chat, ChatParticipant, Message, MessageEdit, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 import redis.asyncio as redis
@@ -8,6 +8,7 @@ from sqlalchemy.orm import aliased
 redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
 ReplyMsg = aliased(Message)
+ReplyUser = aliased(User)
 
 async def save_message_to_global_chat(
     db: AsyncSession,
@@ -166,6 +167,40 @@ async def edit_private_message(
 
     await db.commit()
 
+async def pin_global_message(
+    db: AsyncSession,
+    *,
+    message_id: str,
+    pinned: bool
+):
+    await db.execute(
+        update(Message)
+        .where(Message.id == message_id, Message.chat_id == 1)
+        .values(is_pinned=pinned)
+    )
+    await db.commit()
+
+async def pin_private_message(
+    db: AsyncSession,
+    *,
+    chat_key: str,
+    message_id: str,
+    pinned: bool
+):
+    chat_id = await redis_client.get(f"chat_id:{chat_key}")
+    if not chat_id:
+        chat_id = await db.scalar(
+            select(Chat.id).where(Chat.chat_key == chat_key)
+        )
+        await redis_client.set(f"chat_id:{chat_key}", chat_id)
+
+    await db.execute(
+        update(Message)
+        .where(Message.id == message_id, Message.chat_id == int(chat_id))
+        .values(is_pinned=pinned)
+    )
+    await db.commit()
+
 async def fetch_messages_by_chat_id(
     db: AsyncSession,
     chat_id: int,
@@ -176,9 +211,10 @@ async def fetch_messages_by_chat_id(
         select(
             Message,
             ReplyMsg.content.label("reply_to_text"),
-            ReplyMsg.username.label("reply_to_user"),
+            ReplyUser.username.label("reply_to_user"),
         )
         .outerjoin(ReplyMsg, Message.reply_to_id == ReplyMsg.id)
+        .outerjoin(ReplyUser, ReplyMsg.sender_id == ReplyUser.id)
         .where(Message.chat_id == chat_id, Message.deleted.is_(False))
         .order_by(Message.created_at.asc())
         .limit(limit)

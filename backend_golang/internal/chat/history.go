@@ -5,6 +5,7 @@ import (
 	"log"
 	"context"
 	"time"
+	"strings"
 
 	rds "github.com/redis/go-redis/v9"
 	"messenger/backend_golang/internal/common"
@@ -13,6 +14,7 @@ import (
 
 func SaveMessageToRedisHistory(rdb *rds.Client, roomID string, msg common.OutgoingMessage) {
 	msg.ChatID = roomID
+	NormalizeMessage(&msg, roomID)
 
 	historyKey := "chat:history:" + roomID
 	queueKey := "to_save:global"
@@ -108,8 +110,13 @@ func EditMessageInRedisHistory(rdb *rds.Client, chatID, messageID, newText, curr
 			return nil
 		}
 
+		if strings.TrimSpace(msg.Text) == strings.TrimSpace(newText) {
+			return nil
+		}
+
 		msg.Text = newText
 		msg.EditedAt = time.Now().UnixMilli()
+		NormalizeMessage(&msg, chatID)
 
 		updatedRaw, err := json.Marshal(msg)
 		if err != nil {
@@ -130,6 +137,62 @@ func EditMessageInRedisHistory(rdb *rds.Client, chatID, messageID, newText, curr
 			ChatID:    chatID,
 			NewText:   msg.Text,
 			EditedAt:  msg.EditedAt,
+		}
+	}
+
+	return nil
+}
+
+func PinMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, pin bool) *common.MessagePinned {
+	historyKey := "chat:history:" + chatID
+	queueKey := "to_pin:global"
+	if chatID != "1" {
+		queueKey = "to_pin:private:" + chatID
+	}
+
+	vals, err := redis.LRange(rdb, historyKey, 0, -1)
+	if err != nil {
+		log.Printf("redis lrange error: %v", err)
+		return nil
+	}
+
+	for i, raw := range vals {
+		var msg common.OutgoingMessage
+		if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+			continue
+		}
+
+		if msg.MessageID != messageID {
+			continue
+		}
+
+		msg.Pinned = pin
+		NormalizeMessage(&msg, chatID)
+
+		log.Printf("Message: %#v", msg)
+		updatedRaw, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("marshal pinned message error: %v", err)
+			return nil
+		}
+
+		if err := rdb.LSet(context.Background(), historyKey, int64(i), updatedRaw).Err(); err != nil {
+			log.Printf("redis lset error: %v", err)
+			return nil
+		}
+
+		redis.RPush(rdb, queueKey, updatedRaw)
+
+		action := "unpin"
+		if pin {
+			action = "pin"
+		}
+
+		return &common.MessagePinned{
+			Type:      "message_pinned",
+			MessageID: msg.MessageID,
+			ChatID:    chatID,
+			Action:    action,
 		}
 	}
 

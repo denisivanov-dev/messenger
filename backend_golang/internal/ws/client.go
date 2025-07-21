@@ -41,7 +41,6 @@ func (c *Client) ReadPump() {
 				log.Printf("recover from panic in defer: %v", r)
 			}
 		}()
-
 		c.Hub.Broadcast <- RoomMessage{
 			RoomID: systemRoom,
 			Data:   online.BuildStatusMessage(c.UserID, common.Offline),
@@ -62,69 +61,136 @@ func (c *Client) ReadPump() {
 			return
 		}
 
-		var initMsg common.IncomingMessage
-		if err := json.Unmarshal(raw, &initMsg); err != nil {
-			log.Printf("unmarshal error: %v", err)
+		var msgType common.IncomingMessage
+		if err := json.Unmarshal(raw, &msgType); err != nil {
+			log.Printf("unmarshal type error: %v", err)
 			continue
 		}
 
-		log.Printf("RECEIVED: %+v", initMsg)
+		switch msgType.Type {
 
-		switch initMsg.Type {
 		case "init_global":
+			var payload common.IncomingInitGlobal
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid init_global payload")
+				continue
+			}
 			roomID := "1"
 			c.leaveAllExcept("sys", roomID)
 			c.joinRoomIfNotJoined(roomID)
 			c.sendHistory(roomID, 50)
-			continue
 
 		case "init_private":
-			roomID := c.getRoomID(initMsg.ChatType, initMsg.ReceiverID)
+			var payload common.IncomingInitPrivate
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid init_private payload")
+				continue
+			}
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied or invalid chat")
+				continue
+			}
 			c.leaveAllExcept("sys", roomID)
 			c.joinRoomIfNotJoined(roomID)
-			log.Printf("joined room %s", roomID)
 			c.sendHistory(roomID, 50)
-			continue
 
 		case "typing":
-			roomID := c.getRoomID(initMsg.ChatType, initMsg.ReceiverID)
+			var payload common.IncomingInitPrivate
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid typing payload")
+				continue
+			}
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
 			c.joinRoomIfNotJoined(roomID)
-			payload := common.TypingMessage{
+			c.broadcastJSON(roomID, common.TypingMessage{
 				Type:     "typing",
 				UserID:   c.UserID,
 				Username: c.Username,
 				ChatID:   roomID,
+			})
+
+		case "send_message":
+			var payload common.IncomingSendMessage
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid send_message payload")
+				continue
 			}
-			c.broadcastJSON(roomID, payload)
-			continue
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue 
+			}
+
+			outBytes, ok := chat.HandleSendMessage(payload, c.UserID, c.Username, c.RDB)
+			if !ok {
+				continue
+			}
+			c.joinRoomIfNotJoined(roomID)
+			c.Hub.Broadcast <- RoomMessage{
+				RoomID: roomID,
+				Data:   outBytes,
+			}
 
 		case "delete_message":
-			roomID := c.getRoomID(initMsg.ChatType, initMsg.ReceiverID)
+			var payload common.IncomingDeleteMessage
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid delete_message payload")
+				continue
+			}
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
 			c.joinRoomIfNotJoined(roomID)
-			if deleted := chat.DeleteMessageFromRedisHistory(c.RDB, roomID, initMsg.MessageID, c.UserID); deleted != nil {
+			if deleted := chat.DeleteMessageFromRedisHistory(c.RDB, roomID, payload.MessageID, c.UserID); deleted != nil {
 				c.broadcastJSON(roomID, deleted)
 			}
-			continue
 
 		case "edit_message":
-			roomID := c.getRoomID(initMsg.ChatType, initMsg.ReceiverID)
+			var payload common.IncomingEditMessage
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid edit_message payload")
+				continue
+			}
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
 			c.joinRoomIfNotJoined(roomID)
-			log.Printf("editing")
-			if edited := chat.EditMessageInRedisHistory(c.RDB, roomID, initMsg.MessageID, initMsg.NewText, c.UserID); edited != nil {
+			if edited := chat.EditMessageInRedisHistory(c.RDB, roomID, payload.MessageID, payload.NewText, c.UserID); edited != nil {
 				c.broadcastJSON(roomID, edited)
 			}
-			continue
-		}
 
-		roomID, outBytes, ok := chat.HandleIncoming(raw, c.UserID, c.Username, c.RDB)
-		if !ok {
-			continue
-		}
-		c.joinRoomIfNotJoined(roomID)
+		case "pin_message":
+			var payload common.IncomingPinMessage
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid edit_message payload")
+				continue
+			}
 
-		c.Hub.Broadcast <- RoomMessage{
-			RoomID: roomID,
-			Data:   outBytes,
+			log.Printf(payload.ChatType)
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+			pin := payload.Action == "pin"
+
+			c.joinRoomIfNotJoined(roomID)
+			if pinned := chat.PinMessageInRedisHistory(c.RDB, roomID, payload.MessageID, pin); pinned != nil {
+				c.broadcastJSON(roomID, pinned)
+			}
+
+		default:
+			c.sendError("unsupported message type: " + msgType.Type)
 		}
 	}
 }
