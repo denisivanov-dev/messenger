@@ -7,7 +7,7 @@
     <div v-if="props.message.edited_at" class="absolute top-0 right-0 mt-1 mr-2 text-[10px] text-gray-400">
       изменено • {{ formattedEditDate }}
     </div>
-    
+
     <!-- Заголовок: имя и время -->
     <div
       class="mb-1 text-xs flex items-center gap-1"
@@ -25,11 +25,20 @@
       class="mb-1 text-[11px] text-gray-500 border-l-2 border-blue-400 pl-2 cursor-pointer hover:text-blue-600"
       @click="$emit('scroll-to-message', props.message.reply_to)"
     >
-      ↩ {{ props.message.reply_to_user }}: 
+      ↩ {{ props.message.reply_to_user }}:
       <span class="italic text-gray-500">{{ repliedMessageText }}</span>
     </div>
-    <!-- Текст сообщения -->
-    <p class="text-sm text-gray-900">{{ props.message.text }}</p>
+
+    <!-- Атачменты (если есть) -->
+    <MessageGallery
+      v-if="props.message.attachments && props.message.attachments.some(att => att.type === 'image')"
+      :attachments="props.message.attachments.filter(att => att.type === 'image')"
+      :imageUrls="attachmentUrls"
+      :openImage="(key) => openImage(attachmentUrls[key])"
+    />
+
+    <!-- Текст (если есть) -->
+    <p v-if="props.message.text" class="text-sm text-gray-900">{{ props.message.text }}</p>
 
     <!-- Ховер-меню -->
     <div
@@ -62,21 +71,83 @@
       </button>
     </div>
   </div>
+
+  <!-- Модалка для увеличенного изображения -->
+  <Teleport to="body">
+    <div
+      v-if="fullscreenImageUrl"
+      class="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center"
+      @click="closeImage"
+    >
+      <div class="flex flex-col items-center gap-3" @click.stop>
+        <img
+          :src="fullscreenImageUrl"
+          class="max-w-full max-h-[90vh] shadow-xl"
+        />
+        <a
+          :href="fullscreenImageUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-sm text-white underline hover:text-blue-300"
+        >
+          Открыть оригинал
+        </a>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ReplyIcon, EditIcon, PinIcon, TrashIcon } from 'lucide-vue-next'
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
+import { loadAttachmentUrls } from '../../../utils/attachmentUtils'
+import MessageGallery from './messageGallery.vue'
+
 
 const emit = defineEmits(['reply-to-message', 'edit-message', 'scroll-to-message'])
-
 const props = defineProps({
   message: {
     type: Object,
     required: true
   }
+})
+
+const attachmentUrls = ref({})
+const fullscreenImageUrl = ref(null)
+
+function openImage(url) {
+  fullscreenImageUrl.value = url
+}
+
+function closeImage() {
+  fullscreenImageUrl.value = null
+}
+
+function onEsc(event) {
+  if (event.key === 'Escape') {
+    closeImage()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onEsc)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onEsc)
+})
+
+const chatStore = useChatStore()
+const authStore = useAuthStore()
+const isMyMessage = props.message.user_id == authStore.getUserId
+const onlyImage = computed(() => {
+  return (
+    props.message.text.trim() === '' &&
+    Array.isArray(props.message.attachments) &&
+    props.message.attachments.some(att => typeof att.key === 'string' && att.key.endsWith('.png'))
+  )
 })
 
 const formattedDate = new Date(props.message.timestamp).toLocaleString('ru-RU', {
@@ -100,35 +171,37 @@ const formattedEditDate = computed(() => {
 
 const repliedMessageText = computed(() => {
   const replied = chatStore.messages.find(m => m.message_id === props.message.reply_to)
-  if (!replied) return '[сообщение удалено]'
-  if (replied.text.trim() !== props.message.reply_to_text.trim()) {
+  if (!replied || typeof replied.text !== 'string') return '[сообщение удалено]'
+
+  if (replied.text != '') return replied.text
+  if (onlyImage) return 'Изображение'
+
+  const isEdited = replied.edited_at != null
+  if (isEdited && replied.text.trim() !== props.message.reply_to_text?.trim()) {
     return replied.text + ' (изменено)'
   }
+
   return replied.text
 })
 
-const authStore = useAuthStore()
-const chatStore = useChatStore()
-const isMyMessage = props.message.user_id == authStore.getUserId
-
-const reply = () => {
-  console.log("Ответить:", props.message)
+function reply() {
   emit('reply-to-message', props.message)
 }
 
-const edit = () => {
-  console.log("Редактировать:", props.message)
+function edit() {
   emit('edit-message', props.message)
 }
 
-const pin = () => {
-  console.log("Закрепить:", props.message)
+function pin() {
   const shouldPin = !props.message.pinned
   chatStore.pinMessage(props.message, shouldPin)
 }
 
-const remove = () => {
-  console.log("Удалить:", props.message)
+function remove() {
   chatStore.deleteMessage(props.message)
 }
+
+watch(() => props.message.attachments, () => {
+  loadAttachmentUrls([props.message], chatStore.imageUrlCache.value, attachmentUrls)
+}, { immediate: true })
 </script>

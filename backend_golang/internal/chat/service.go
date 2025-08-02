@@ -38,6 +38,7 @@ func BuildMessage(in common.IncomingSendMessage, userID, username string) common
 		MessageID:    uuid.NewString(),
 		ChatID:       chatID,
 		Text:         in.Text,
+		Attachments:  in.Attachments,
 		Timestamp:    time.Now().UnixMilli(),
 		Username:     username,
 		UserID:       userID,

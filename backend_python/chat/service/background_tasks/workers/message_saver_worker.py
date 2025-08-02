@@ -23,6 +23,9 @@ async def listen_to_save_queue(queue: str):
 async def process_save_message(queue: str, message: dict, db: AsyncSession):
     print("Сохраняю:", queue, message)
 
+    attachments = message.get("attachments", [])
+    reply_to_id = message.get("reply_to")
+
     if queue == "to_save:global":
         try:
             await save_message_to_global_chat(
@@ -30,7 +33,9 @@ async def process_save_message(queue: str, message: dict, db: AsyncSession):
                 message_id=message["message_id"],
                 user_id=int(message["user_id"]),
                 text=message["text"],
-                timestamp_ms=message["timestamp"]
+                timestamp_ms=message["timestamp"],
+                reply_to_id=reply_to_id,
+                attachments=attachments
             )
         except Exception as e:
             print("❌ Ошибка при сохранении глобального:", e)
@@ -43,7 +48,9 @@ async def process_save_message(queue: str, message: dict, db: AsyncSession):
                 message_id=message["message_id"],
                 sender_id=int(message["user_id"]),
                 text=message["text"],
-                timestamp_ms=message["timestamp"]
+                timestamp_ms=message["timestamp"],
+                reply_to_id=reply_to_id,
+                attachments=attachments
             )
         except Exception as e:
             print("❌ Ошибка при сохранении приватного:", e)

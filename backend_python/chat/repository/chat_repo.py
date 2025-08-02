@@ -16,6 +16,8 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
 
     raw_messages = await redis_client.lrange(redis_queue_key, 0, -1)
     if raw_messages:
+        await redis_client.expire(redis_queue_key, 900)
+        
         messages_dto = [json.loads(m) for m in raw_messages]
         query = select(Chat).where(Chat.chat_key == chat_key)
         result = await db.execute(query)
@@ -52,7 +54,7 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
         if messages_dto:
             redis_pipe = redis_client.pipeline()
             redis_pipe.rpush(redis_queue_key, *[json.dumps(m) for m in messages_dto])
-            redis_pipe.expire(redis_queue_key, 3600)
+            redis_pipe.expire(redis_queue_key, 900)
             await redis_pipe.execute()
 
         await redis_client.set(f"chat_id:{chat_key}", chat.id)

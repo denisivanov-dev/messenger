@@ -1,9 +1,11 @@
 from datetime import datetime
-from backend_python.chat.models import Chat, ChatParticipant, Message, MessageEdit, User
+from backend_python.chat.models import (
+    Chat, ChatParticipant, Message, MessageEdit, User, Attachment
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 import redis.asyncio as redis
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
@@ -16,42 +18,90 @@ async def save_message_to_global_chat(
     message_id: str,
     user_id: int,
     text: str,
-    timestamp_ms: int
+    timestamp_ms: int,
+    reply_to_id: str = None,
+    attachments: list
 ):
+    if attachments and text.strip():
+        msg_type = "text/image"
+    elif attachments:
+        msg_type = "image"
+    elif text.strip():
+        msg_type = "text"
+    else:
+        msg_type = "empty"
+
     msg = Message(
         id=message_id,
         chat_id=1,
         sender_id=user_id,
+        type=msg_type,
         content=text,
-        created_at=datetime.fromtimestamp(timestamp_ms / 1000.0)
+        reply_to_id=reply_to_id,
+        created_at=datetime.fromtimestamp(timestamp_ms / 1000.0),
     )
-    
+
     db.add(msg)
+    await db.flush()
+
+    for att in attachments:
+        db.add(Attachment(
+            message_id=message_id,
+            filename=att["key"],
+            filetype=att["type"],
+            filesize=att["size"],
+            original_name=att["original_name"]
+        ))
+
     await db.commit()
 
 async def save_private_message(
     db: AsyncSession,
     *,
     message_id: str,
-    chat_key: int,
+    chat_key: str,
     sender_id: int,
     text: str,
-    timestamp_ms: int
+    timestamp_ms: int,
+    reply_to_id: str = None,
+    attachments: list
 ):
     chat_id = await redis_client.get(f"chat_id:{chat_key}")
     if not chat_id:
         chat_id = await db.scalar(select(Chat.id).where(Chat.chat_key == chat_key))
         await redis_client.set(f"chat_id:{chat_key}", chat_id)
-    
+
+    if attachments and text.strip():
+        msg_type = "text/image"
+    elif attachments:
+        msg_type = "image"
+    elif text.strip():
+        msg_type = "text"
+    else:
+        msg_type = "empty"
+
     msg = Message(
         id=message_id,
         chat_id=int(chat_id),
         sender_id=sender_id,
+        type=msg_type,
         content=text,
-        created_at=datetime.fromtimestamp(timestamp_ms / 1000.0)
+        reply_to_id=reply_to_id,
+        created_at=datetime.fromtimestamp(timestamp_ms / 1000.0),
     )
 
     db.add(msg)
+    await db.flush()
+
+    for att in attachments:
+        db.add(Attachment(
+            message_id=message_id,
+            filename=att["key"],
+            filetype=att["type"],
+            filesize=att["size"],
+            original_name=att["original_name"]
+        ))
+
     await db.commit()
 
 async def delete_global_message(
@@ -216,6 +266,7 @@ async def fetch_messages_by_chat_id(
         .outerjoin(ReplyMsg, Message.reply_to_id == ReplyMsg.id)
         .outerjoin(ReplyUser, ReplyMsg.sender_id == ReplyUser.id)
         .where(Message.chat_id == chat_id, Message.deleted.is_(False))
+        .options(selectinload(Message.attachments))
         .order_by(Message.created_at.asc())
         .limit(limit)
         .offset(offset)

@@ -17,11 +17,19 @@ async def preload_global_chat_history():
 
     async with SessionFactory() as db:
         messages = await fetch_messages_by_chat_id(db, chat_id, limit)
-
         usernames_map = await fetch_usernames_map(db, messages)
 
     values = []
     for msg, reply_text, reply_user in messages:
+        attachments_list = []
+        for attachment in msg.attachments:
+            attachments_list.append({
+                "key": attachment.filename,
+                "type": attachment.filetype,
+                "size": attachment.filesize,
+                "original_name": attachment.original_name,
+            })
+
         msg_dict = {
             "message_id": msg.id,
             "user_id": str(msg.sender_id),
@@ -35,7 +43,9 @@ async def preload_global_chat_history():
             "reply_to_text": reply_text,
             "reply_to_user": reply_user,
             "pinned": msg.is_pinned,
+            "attachments": attachments_list,
         }
+
         values.append(json.dumps(msg_dict))
 
     if values:

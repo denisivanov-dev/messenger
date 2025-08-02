@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, reactive  } from 'vue'
 import { connect, disconnect, sendMessage, getAllUsers, startPrivateChat } from '../api/chatApi'
 import { isNearBottom } from '../utils/chatWindowUtils'
 import { useAuthStore } from '../../auth/store/authStore'
+import { uploadFileToR2 } from '../api/chatApi'
+import { useStorage } from '@vueuse/core'
 
 export const useChatStore = defineStore('chat', () => {
   // --- STATE ---
@@ -13,6 +15,8 @@ export const useChatStore = defineStore('chat', () => {
   const chatType = ref('global')
   const receiverID = ref(null)
   const typingUser = ref(null)
+
+  const imageUrlCache = useStorage('image-url-cache', {})
 
   let typingTimer = null
   let typingCooldown = false
@@ -56,6 +60,8 @@ export const useChatStore = defineStore('chat', () => {
     const myId = authStore.getUserId
 
     connect(token, (msg) => {
+      console.info('[ws message]', JSON.stringify(msg, null, 2))
+      
       if (msg.event === 'user_status') {
         const user = users.value.find(u => u.id === msg.user_id)
         if (user) user.status = msg.status
@@ -96,7 +102,15 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       typingUser.value = null
-      messages.value.push(msg)
+      const shouldAutoScroll = isNearBottom()
+
+      try {
+        console.log('🧩 Pushing message:', JSON.stringify(msg, null, 2))
+        messages.value.push(msg)
+      } catch (err) {
+        console.error('🔥 PUSH CRASH:', err, msg)
+      }
+      
       shouldScroll.value = isNearBottom()
     }, mode, receiverId)
 
@@ -110,10 +124,20 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // --- MESSAGING ---
-  function send(text, replyToMessage = null) {
+ function sendMessageData({ text = '', attachments = [], replyToMessage = null }) {
+    if (!text.trim() && attachments.length === 0) return
+
+    const safeAttachments = attachments.map(att => ({
+      key: att.key,
+      type: att.type,
+      size: att.size,
+      original_name: att.original_name,
+    }))
+
     const msg = {
       type: 'send_message',
       text: text.trim(),
+      attachments: safeAttachments,
       timestamp: Date.now(),
       chat_type: chatType.value,
       receiver_id: receiverID.value,
@@ -124,8 +148,9 @@ export const useChatStore = defineStore('chat', () => {
       msg.reply_to_text = replyToMessage.text
       msg.reply_to_user = replyToMessage.username
     }
+    const json = JSON.stringify(msg)
+    console.log('📦 WS payload size:', json.length)
 
-    console.info(msg.reply_to, msg.reply_to_text, msg.reply_to_user)
     sendMessage(msg)
     shouldScroll.value = true
   }
@@ -194,7 +219,7 @@ export const useChatStore = defineStore('chat', () => {
   function editMessage(message, newText) {
     sendMessage({
       type: 'edit_message',
-      message_id: message.message_id,
+      message_id: message.message_id, 
       new_text: newText,
       receiver_id: receiverID.value,
       chat_type: chatType.value
@@ -214,6 +239,26 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
+  async function sendImage(file, replyTo) {
+    const { key, filesize, original_name } = await uploadFileToR2(file)
+
+    sendMessage({
+      type: 'send_image',
+      text: '',
+      reply_to: replyTo?.message_id || null,
+      receiver_id: receiverID.value,
+      chat_type: chatType.value,
+      attachments: [
+        {
+          key: key,
+          type: 'image',
+          size: filesize,
+          original_name: original_name,
+        }
+      ]
+    })
+  }
+
   return {
     // state
     messages,
@@ -221,6 +266,7 @@ export const useChatStore = defineStore('chat', () => {
     connected,
     shouldScroll,
     typingUser,
+    imageUrlCache,
 
     // mode
     setChatModeGlobal,
@@ -231,13 +277,14 @@ export const useChatStore = defineStore('chat', () => {
     stopChat,
 
     // actions
-    send,
+    sendMessageData,
     sendTyping,
     setTyping,
     fetchUsers,
     openOrCreatePrivateChat,
     deleteMessage,
     editMessage,
-    pinMessage
+    pinMessage,
+    sendImage
   }
 })

@@ -12,6 +12,14 @@ type IncomingSendMessage struct {
 	ReplyTo     string `json:"reply_to"`
 	ReplyToText string `json:"reply_to_text"`
 	ReplyToUser string `json:"reply_to_user"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+type Attachment struct {
+	Key          string `json:"key"`
+	Type         string `json:"type"` // "image", "file", etc.
+	Size         int    `json:"size"`
+	OriginalName string `json:"original_name"`
 }
 
 type IncomingDeleteMessage struct {
@@ -64,6 +72,7 @@ type OutgoingMessage struct {
 	ReplyToText string `json:"reply_to_text,omitempty"`
 	ReplyToUser string `json:"reply_to_user,omitempty"`
 	Pinned      bool   `json:"pinned"`
+	Attachments   []Attachment `json:"attachments,omitempty"`
 }
 
 type TypingMessage struct {

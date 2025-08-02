@@ -121,21 +121,25 @@ func (c *Client) ReadPump() {
 				continue
 			}
 
+			if len(payload.Attachments) > 5 {
+				c.sendError("too many attachments: max 5")
+				continue
+			}
+
 			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
 			if !ok {
 				c.sendError("access denied")
 				continue 
 			}
 
-			outBytes, ok := chat.HandleSendMessage(payload, c.UserID, c.Username, c.RDB)
+			// log.Printf("📨 Incoming send_message: user=%s attachments=%d", c.UserID, len(payload.Attachments))
+			
+			outMsg, ok := chat.HandleSendMessage(payload, c.UserID, c.Username, c.RDB)
 			if !ok {
 				continue
 			}
 			c.joinRoomIfNotJoined(roomID)
-			c.Hub.Broadcast <- RoomMessage{
-				RoomID: roomID,
-				Data:   outBytes,
-			}
+			c.broadcastJSON(roomID, outMsg)
 
 		case "delete_message":
 			var payload common.IncomingDeleteMessage

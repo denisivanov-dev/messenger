@@ -45,6 +45,7 @@ class Message(Base):
     chat_id   = Column(ForeignKey("chats.id",  ondelete="CASCADE"), nullable=False, index=True)
     sender_id = Column(ForeignKey("users.id",  ondelete="SET NULL"), nullable=True, index=True)
 
+    type = Column(String, nullable=False, default="text")
     content    = Column(Text, nullable=False)
     is_edited  = Column(Boolean, default=False)
     deleted    = Column(Boolean, default=False)
@@ -72,3 +73,18 @@ class MessageEdit(Base):
     edited_at = Column(DateTime(timezone=True), server_default=func.now())
 
     message = relationship("Message", backref="edits")
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    filename   = Column(String, nullable=False)
+    filetype   = Column(String, nullable=False)  # image, video, audio, file
+    filesize   = Column(Integer, nullable=False)
+    original_name = Column(String, nullable=True)
+
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    message = relationship("Message", backref="attachments")
