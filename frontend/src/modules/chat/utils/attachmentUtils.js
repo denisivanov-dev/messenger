@@ -1,14 +1,19 @@
 import { getImagefromKey } from '../api/chatApi'
 
 export async function loadAttachmentUrls(messages, imageUrlCache, attachmentUrlsRef) {
-  if (!messages || messages.length === 0) return
   const now = Date.now()
+  
+  if (!messages || messages.length === 0) return
+  if (!imageUrlCache) return
+  if (!attachmentUrlsRef?.value || typeof attachmentUrlsRef.value !== 'object') {
+    attachmentUrlsRef.value = {}
+  }
 
   for (const msg of messages) {
-    if (!msg.attachments || msg.attachments.length === 0) continue
+    if (!msg?.attachments?.length) continue
 
     for (const att of msg.attachments) {
-      if (att.type !== 'image') continue
+      if (!att?.key || att.type !== 'image') continue
 
       const cached = imageUrlCache[att.key]
       const isValid = cached && cached.expiresAt > now
@@ -32,7 +37,7 @@ export async function loadAttachmentUrls(messages, imageUrlCache, attachmentUrls
           }, expiresAt - now + 1000)
         }
       } catch (err) {
-        console.error('Ошибка загрузки изображения:', att.key, err)
+        console.error("Ошибка загрузки:", att.key, err)
       }
     }
   }

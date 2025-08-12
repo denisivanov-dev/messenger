@@ -143,7 +143,7 @@ func EditMessageInRedisHistory(rdb *rds.Client, chatID, messageID, newText, curr
 	return nil
 }
 
-func PinMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, pin bool) *common.MessagePinned {
+func PinMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, pin bool, currentUserID string) *common.MessagePinned {
 	historyKey := "chat:history:" + chatID
 	queueKey := "to_pin:global"
 	if chatID != "1" {
@@ -164,6 +164,11 @@ func PinMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, pin boo
 
 		if msg.MessageID != messageID {
 			continue
+		}
+
+		if msg.UserID != currentUserID {
+			log.Printf("unauthorized pin attempt by %s for message %s", currentUserID, messageID)
+			return nil
 		}
 
 		msg.Pinned = pin

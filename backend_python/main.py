@@ -6,6 +6,8 @@ from backend_python.auth.routes import router as auth_router
 from backend_python.chat.routes.users import router as users_router
 from backend_python.chat.routes.chats import router as chat_router
 from backend_python.chat.routes.messages import router as messages_router
+from backend_python.chat.routes.friends import router as friends_router
+
 from backend_python.auth.utils.redis_client import redis_client
 
 
@@ -38,3 +40,4 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(messages_router, prefix="/api")
+app.include_router(friends_router, prefix="/api")

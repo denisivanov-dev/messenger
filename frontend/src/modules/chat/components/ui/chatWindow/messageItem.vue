@@ -202,6 +202,6 @@ function remove() {
 }
 
 watch(() => props.message.attachments, () => {
-  loadAttachmentUrls([props.message], chatStore.imageUrlCache.value, attachmentUrls)
+  loadAttachmentUrls([props.message], chatStore.imageUrlCache, attachmentUrls)
 }, { immediate: true })
 </script>

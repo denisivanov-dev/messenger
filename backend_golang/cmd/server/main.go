@@ -6,6 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"messenger/backend_golang/internal/ws"
+	"messenger/backend_golang/internal/pubsub"
 	"context"
 )
 
@@ -24,6 +25,8 @@ func main() {
 
 	hub := ws.NewHub()
 	go hub.Run()
+
+	pubsub.StartFriendRequestSubscriber(ctx, rdb, hub)
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		ws.ServeWS(hub, rdb, w, r)

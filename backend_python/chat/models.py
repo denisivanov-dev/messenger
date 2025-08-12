@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime,
-    ForeignKey, Index, UniqueConstraint
+    ForeignKey, Index, UniqueConstraint, CheckConstraint
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -88,3 +88,25 @@ class Attachment(Base):
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     message = relationship("Message", backref="attachments")
+
+class FriendLink(Base):
+    __tablename__ = "friend_links"
+
+    id = Column(Integer, primary_key=True)
+    user1_id = Column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user2_id = Column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    status = Column(Text, nullable=False, index=True)           # 'pending' | 'friends'
+    requested_by = Column(Integer, nullable=True, index=True)   # кто отправил (только при pending)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user1_id", "user2_id", name="uc_friend_pair_single"),
+        CheckConstraint("user1_id < user2_id", name="ck_friend_pair_order"),
+        Index("ix_friend_links_users", "user1_id", "user2_id"),
+    )
+
+    user1 = relationship(User, foreign_keys=[user1_id])
+    user2 = relationship(User, foreign_keys=[user2_id])

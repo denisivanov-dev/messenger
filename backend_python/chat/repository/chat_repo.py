@@ -2,7 +2,7 @@ from sqlalchemy import select, func
 from backend_python.chat.models import Chat, ChatParticipant, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
-from sqlalchemy.orm import selectinload, selectinload
+from sqlalchemy.orm import selectinload
 import json
 import redis.asyncio as redis
 
@@ -17,11 +17,11 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
     raw_messages = await redis_client.lrange(redis_queue_key, 0, -1)
     if raw_messages:
         await redis_client.expire(redis_queue_key, 900)
-        
         messages_dto = [json.loads(m) for m in raw_messages]
-        query = select(Chat).where(Chat.chat_key == chat_key)
-        result = await db.execute(query)
-        chat = result.scalars().first()
+
+        chat_result = await db.execute(select(Chat).where(Chat.chat_key == chat_key))
+        chat = chat_result.scalars().first()
+
         return chat, messages_dto
 
     query = (
@@ -32,7 +32,7 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
             ChatParticipant.user_id.in_([user1_id, user2_id])
         )
         .group_by(Chat.id)
-        .having(func.count(Chat.id) == 2) 
+        .having(func.count(Chat.id) == 2)
     )
     result = await db.execute(query)
     chat = result.scalars().first()
@@ -40,7 +40,11 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
     if chat:
         messages_query = (
             select(Message)
-            .options(selectinload(Message.sender))
+            .options(
+                selectinload(Message.sender),
+                selectinload(Message.attachments),
+                selectinload(Message.reply_to).selectinload(Message.sender),
+            )
             .where(
                 Message.chat_id == chat.id,
                 Message.deleted == False
@@ -49,7 +53,9 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
         )
         messages_result = await db.execute(messages_query)
         messages = messages_result.scalars().all()
-        messages_dto = [message_utils.orm_to_dto(msg=m, receiver_id=user2_id) for m in messages]
+        messages_dto = [
+            message_utils.orm_to_dto(msg=m, receiver_id=user2_id) for m in messages
+        ]
 
         if messages_dto:
             redis_pipe = redis_client.pipeline()
@@ -62,7 +68,12 @@ async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: 
 
         return chat, messages_dto
 
-    new_chat = Chat(type='private', title=None, created_at=datetime.utcnow(), chat_key=chat_key)
+    new_chat = Chat(
+        type='private',
+        title=None,
+        created_at=datetime.utcnow(),
+        chat_key=chat_key
+    )
     db.add(new_chat)
     await db.flush()
 
@@ -82,5 +93,4 @@ async def get_private_chat_keys(db: AsyncSession) -> list[str]:
     query = select(Chat.chat_key).where(Chat.type == "private")
     result = await db.execute(query)
     chat_keys = result.scalars().all()
-
     return [key for key in chat_keys if key]

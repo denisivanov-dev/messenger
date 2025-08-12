@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
 )
 
@@ -22,18 +23,20 @@ type Hub struct {
 	Broadcast  chan RoomMessage
 	JoinRoom   chan joinReq
 
-	clients map[*Client]bool
-	rooms   map[string]map[*Client]bool
+	clients     map[*Client]bool
+	userClients map[string]*Client
+	rooms       map[string]map[*Client]bool
 }
 
 func NewHub() *Hub {
 	h := &Hub{
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		Broadcast:  make(chan RoomMessage, 256),
-		JoinRoom:   make(chan joinReq, 64),
-		clients:    make(map[*Client]bool),
-		rooms:      make(map[string]map[*Client]bool),
+		Register:     make(chan *Client),
+		Unregister:   make(chan *Client),
+		Broadcast:    make(chan RoomMessage, 256),
+		JoinRoom:     make(chan joinReq, 64),
+		clients:      make(map[*Client]bool),
+		userClients:  make(map[string]*Client),
+		rooms:        make(map[string]map[*Client]bool),
 	}
 	go h.Run()
 	return h
@@ -60,15 +63,22 @@ func (h *Hub) Run() {
 		select {
 		case c := <-h.Register:
 			h.clients[c] = true
+			h.userClients[c.UserID] = c 
 			for rid := range c.Rooms {
 				if h.rooms[rid] == nil {
 					h.rooms[rid] = make(map[*Client]bool)
 				}
 				h.rooms[rid][c] = true
 			}
+			// Лог всех юзеров после каждого подключения
+			log.Printf("Active clients:")
+			for uid := range h.userClients {
+				log.Printf("• %s", uid)
+			}
 
 		case c := <-h.Unregister:
 			delete(h.clients, c)
+			delete(h.userClients, c.UserID)
 			for rid := range c.Rooms {
 				if set, ok := h.rooms[rid]; ok && set != nil {
 					delete(set, c)
@@ -105,5 +115,32 @@ func (h *Hub) Run() {
 				}
 			}
 		}
+	}
+}
+
+// SendToUser sends payload to a specific user if connected
+func (h *Hub) SendToUser(userID string, payload any) {
+	client, ok := h.userClients[userID]
+	log.Printf("📨 SendToUser: to=%s, connected=%v, payload=%+v", userID, ok, payload)
+
+	if !ok {
+		log.Printf("⚠️ user %s not connected", userID)
+		return
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("❌ Marshal error in SendToUser: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+		log.Printf("✅ Sent WS payload to user=%s", userID)
+	default:
+		log.Printf("🚫 Send channel full, unregistering user=%s", userID)
+		client.once.Do(func() {
+			h.Unregister <- client
+		})
 	}
 }

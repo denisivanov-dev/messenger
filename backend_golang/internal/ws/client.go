@@ -101,6 +101,7 @@ func (c *Client) ReadPump() {
 				c.sendError("invalid typing payload")
 				continue
 			}
+			
 			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
 			if !ok {
 				c.sendError("access denied")
@@ -189,7 +190,8 @@ func (c *Client) ReadPump() {
 			pin := payload.Action == "pin"
 
 			c.joinRoomIfNotJoined(roomID)
-			if pinned := chat.PinMessageInRedisHistory(c.RDB, roomID, payload.MessageID, pin); pinned != nil {
+
+			if pinned := chat.PinMessageInRedisHistory(c.RDB, roomID, payload.MessageID, pin, c.UserID); pinned != nil {
 				c.broadcastJSON(roomID, pinned)
 			}
 

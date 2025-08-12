@@ -4,14 +4,13 @@ from backend_python.chat.models import Message, Attachment
 
 def orm_to_dto(msg: Message, receiver_id: int) -> dict:
     attachments = []
-    if msg.attachment:
-        for att in msg.attachment:
-            attachments.append({
-                "key": att.filename,
-                "type": att.file_type,
-                "size": att.file_size,
-                "original_name": att.original_name
-            })
+    for att in msg.attachments or []:
+        attachments.append({
+            "key": att.filename,
+            "type": att.filetype,
+            "size": att.filesize,
+            "original_name": att.original_name
+        })
 
     return {
         "message_id": msg.id,

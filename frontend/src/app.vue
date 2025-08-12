@@ -1,5 +1,6 @@
 <template>
   <router-view />
+  <div id="global-particle-layer" class="fixed inset-0 pointer-events-none z-[9999]"></div>
 </template>
 
 <script setup>
