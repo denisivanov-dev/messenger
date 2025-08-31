@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   db:
     image: postgres:16
@@ -6,12 +5,15 @@ services:
       POSTGRES_DB: app
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
-    ports: ["5432:5432"]
-    volumes: [ "pgdata:/var/lib/postgresql/data" ]
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    ports:
+      - "6379:6379"
 
   api:
     image: python:3.12-slim
@@ -22,8 +24,25 @@ services:
       DATABASE_URL: postgresql+psycopg2://app:app@db:5432/app
       REDIS_URL: redis://redis:6379/0
     depends_on: [db, redis]
-    command: bash -lc "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-    ports: ["8000:8000"]
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             uvicorn backend_python.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+
+  workers:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ../backend_python:/app
+    environment:
+      DATABASE_URL: postgresql+psycopg2://app:app@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [db, redis]
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             python -m backend_python.chat.service.background_tasks.run_scheduled &
+             python -m backend_python.chat.service.background_tasks.run_workers"
 
   ws:
     image: golang:1.22
@@ -31,8 +50,11 @@ services:
     volumes:
       - ../backend_golang:/app
     depends_on: [redis]
-    command: bash -lc "go mod download && go run ./cmd/server"
-    ports: ["8080:8080"]
+    command: >
+      sh -c "go install github.com/air-verse/air@latest &&
+             air -c .air.toml"
+    ports:
+      - "8080:8080"
 
   web:
     image: node:20
@@ -42,8 +64,10 @@ services:
     environment:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8080
-    command: bash -lc "npm ci && npm run dev -- --host"
-    ports: ["5173:5173"]
+    command: >
+      sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
 
 volumes:
   pgdata:
