@@ -17,10 +17,11 @@ services:
 
   api:
     image: python:3.12-slim
-    working_dir: /app
     volumes:
-      - ../backend_python:/app
+      - ..:/app
+    working_dir: /app/backend_python
     environment:
+      PYTHONPATH: /app
       DATABASE_URL: postgresql+psycopg2://app:app@db:5432/app
       REDIS_URL: redis://redis:6379/0
     depends_on: [db, redis]
@@ -32,10 +33,11 @@ services:
 
   workers:
     image: python:3.12-slim
-    working_dir: /app
     volumes:
-      - ../backend_python:/app
+      - ..:/app
+    working_dir: /app/backend_python
     environment:
+      PYTHONPATH: /app
       DATABASE_URL: postgresql+psycopg2://app:app@db:5432/app
       REDIS_URL: redis://redis:6379/0
     depends_on: [db, redis]
@@ -45,22 +47,25 @@ services:
              python -m backend_python.chat.service.background_tasks.run_workers"
 
   ws:
-    image: golang:1.22
-    working_dir: /app
+    image: golang:1.24
     volumes:
-      - ../backend_golang:/app
+      - ..:/app
+    working_dir: /app
     depends_on: [redis]
+    environment:
+      GOTOOLCHAIN: auto
     command: >
-      sh -c "go install github.com/air-verse/air@latest &&
+      sh -c "go mod download &&
+             go install github.com/air-verse/air@latest &&
              air -c .air.toml"
     ports:
       - "8080:8080"
 
   web:
     image: node:20
-    working_dir: /app
     volumes:
-      - ../frontend:/app
+      - ..:/app
+    working_dir: /app/frontend
     environment:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8080
