@@ -42,10 +42,10 @@ const router = useRouter()
 const chatStore = useChatStore()
 
 const friendStatusCache = chatStore.friendStatusCache
-const allUsers = chatStore.users
+const allUsers = computed(() => Object.values(chatStore.users))
 
 const friends = computed(() =>
-  allUsers.filter(user => friendStatusCache[user.id] === 'friends')
+  allUsers.value.filter(user => friendStatusCache[user.id] === 'friends')
 )
 
 const onlineFriends = computed(() =>

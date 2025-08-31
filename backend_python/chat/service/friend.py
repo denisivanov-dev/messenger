@@ -36,7 +36,7 @@ async def get_friend_status_map(db: AsyncSession, user_id: int):
     for fid in friends_ids:
         status_map[fid] = "friends"
     for fid in incoming_ids:
-        status_map[fid] = "incoming"
+        status_map[fid] = "pending"
     for fid in outgoing_ids:
         status_map[fid] = "outgoing"
 

@@ -15,7 +15,8 @@ async def get_username_by_id(db: AsyncSession, user_id: int) -> str | None:
     return username
 
 async def get_all_users(db: AsyncSession) -> List[Tuple[int, str]]:
-    query = select(User.id, User.username).where(User.is_active.is_(True))
+    query = select(User.id, User.username, 
+                   User.avatar_url, User.bio).where(User.is_active.is_(True))
     result = await db.execute(query)
     users = result.all()
 

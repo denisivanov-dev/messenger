@@ -176,10 +176,10 @@ const chatStore = useChatStore()
 const { users, friendStatusCache } = storeToRefs(chatStore)
 
 const incomingRequests = computed(() =>
-  (users.value || []).filter(u => friendStatusCache.value?.[u.id] === 'incoming')
+  Object.values(users.value || {}).filter(u => friendStatusCache.value?.[u.id] === 'incoming')
 )
 const outgoingRequests = computed(() =>
-  (users.value || []).filter(u => friendStatusCache.value?.[u.id] === 'outgoing')
+  Object.values(users.value || {}).filter(u => friendStatusCache.value?.[u.id] === 'outgoing')
 )
 
 async function acceptFriend(userId) {

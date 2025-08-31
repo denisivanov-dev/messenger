@@ -1,7 +1,7 @@
 <template>
   <div
     ref="chatWindowRef"
-    class="chat-window w-full max-w-[1300px] h-[780px] p-5 bg-gray-100 rounded-2xl shadow-md overflow-y-scroll flex flex-col gap-2"
+    class="chat-window w-full max-w-[1300px] p-5 bg-gray-100 rounded-2xl shadow-md overflow-y-scroll flex flex-col gap-2"
   >
     <MessageItem
       v-for="msg in messages"

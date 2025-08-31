@@ -9,12 +9,16 @@ import { useMessagesStore } from './messagesStore'
 import { useUserStore } from './userStore'
 import { useFriendsStore } from './friendsStore'
 import { useEventsStore } from './eventsStore'
+import { useCallStore } from './call/callStore'
+import { useWebRTCStore } from './call/webrtcStore'
 
 export const useChatStore = defineStore('chat', () => {
   const messagesStore = useMessagesStore()
   const userStore = useUserStore()
   const friendsStore = useFriendsStore()
   const eventsStore = useEventsStore()
+  const callStore = useCallStore()
+  const webrtcStore = useWebRTCStore()
 
   const { messages, shouldScroll } = storeToRefs(messagesStore)
   const { users } = storeToRefs(userStore)
@@ -96,6 +100,47 @@ export const useChatStore = defineStore('chat', () => {
         return
       }
 
+      if (msg.type === 'incoming_call') {
+        callStore.handleIncomingCall(msg.from_user)
+        return
+      }
+
+      if (msg.type === 'incoming_cancel_call') {
+        callStore.handleCallCanceled(msg.from_user)
+        return
+      }
+
+      if (msg.type === 'incoming_call_answer') {
+        callStore.handleCallAnswer(msg.from_user, msg.accepted)
+      }
+
+      if (msg.type === 'incoming_join_call') {
+        callStore.handleJoinCall(msg.from_user)
+      }
+
+      if (msg.type === 'incoming_leave_call') {
+        delete callStore.callMembers[msg.from_user]
+      }
+
+      if (msg.type === 'incoming_webrtc_offer') {
+        webrtcStore.handleOffer(msg.from_user, msg.offer)
+        return
+      }
+
+      if (msg.type === 'incoming_webrtc_answer') {
+        webrtcStore.handleAnswer(msg.from_user, msg.answer)
+        return
+      }
+
+      if (msg.type === 'incoming_ice_candidate') {
+        webrtcStore.handleIceCandidate(msg.from_user, msg.candidate)
+        return
+      }
+
+      if (msg.type === 'incoming_camera_status') {
+        callStore.updateCameraStatus(msg.from_user, msg.enabled)
+      }
+            
       const shouldAutoScroll = isNearBottom()
       messagesStore.pushFromWs(msg)
     }, mode, receiverId)
@@ -165,6 +210,7 @@ export const useChatStore = defineStore('chat', () => {
     typingUser,
     imageUrlCache,
     friendStatusCache,
+    receiverID,
 
     // mode
     setChatModeGlobal,

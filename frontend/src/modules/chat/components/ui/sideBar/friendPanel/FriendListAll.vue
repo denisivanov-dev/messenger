@@ -96,9 +96,10 @@ const emit = defineEmits([
 const selectedForDeletion = ref(null)
 
 const friendStatusCache = chatStore.friendStatusCache
-const allUsers = chatStore.users
+const allUsers = computed(() => Object.values(chatStore.users))
+
 const friends = computed(() =>
-  allUsers.filter(user => friendStatusCache[user.id] === 'friends')
+  allUsers.value.filter(user => friendStatusCache[user.id] === 'friends')
 )
 
 async function startChatWithUser(userId) {

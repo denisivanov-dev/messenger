@@ -18,7 +18,7 @@ async def load_all_chat_ids():
 
     pipe = redis_client.pipeline()
 
-    for user_id, _ in user_list:
+    for user_id, *_ in user_list:
         uid = str(user_id)
         pipe.sadd(f"user:{uid}:chats", GLOBAL_CHAT_ID)
 

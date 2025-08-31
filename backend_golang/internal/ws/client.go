@@ -13,6 +13,7 @@ import (
 	"messenger/backend_golang/internal/chat"
 	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/online"
+	"messenger/backend_golang/internal/voice"
 )
 
 const (
@@ -194,6 +195,224 @@ func (c *Client) ReadPump() {
 			if pinned := chat.PinMessageInRedisHistory(c.RDB, roomID, payload.MessageID, pin, c.UserID); pinned != nil {
 				c.broadcastJSON(roomID, pinned)
 			}
+
+		case "start_call":
+			var payload common.IncomingStartCall
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid start_call payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
+			voice.SetCallParticipant(c.RDB, roomID, payload.ReceiverID, "calling")
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCallNotification{
+				Type:     "incoming_call",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+			})
+
+		case "cancel_call":
+			var payload common.IncomingCancelCall
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid cancel_call payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			voice.RemoveCallParticipant(c.RDB, roomID, payload.ReceiverID)
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCancelCallNotification{
+				Type:     "incoming_cancel_call",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+			})
+
+		case "call_answer":
+			var payload common.IncomingCallAnswer
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid call_answer payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			if !payload.Accepted {
+				voice.RemoveCallParticipant(c.RDB, roomID, c.UserID)
+			}
+
+			voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCallAnswer{
+				Type:     "incoming_call_answer",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+				Accepted: payload.Accepted,
+			})
+
+		case "join_call":
+			var payload common.IncomingJoinCall
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid join_call payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingJoinCallNotification{
+				Type:     "incoming_join_call",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+			})
+
+		case "leave_call":
+			var payload common.IncomingLeaveCall
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid leave_call payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			voice.RemoveCallParticipant(c.RDB, roomID, c.UserID)
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingLeaveCallNotification{
+				Type:     "incoming_leave_call",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+			})
+
+		case "webrtc_offer":
+			var payload common.IncomingWebRTCOffer
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid webrtc_offer payload")
+				continue
+			}
+
+			if payload.ReceiverID == "" || payload.Offer == nil {
+				c.sendError("invalid webrtc_offer structure")
+				continue
+			}
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingWebRTCOffer{
+				Type:     "incoming_webrtc_offer",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+				Offer:    payload.Offer,
+			})
+
+		case "webrtc_answer":
+			var payload common.IncomingWebRTCAnswer
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid webrtc_answer payload")
+				continue
+			}
+
+			if payload.ReceiverID == "" || payload.Answer == nil {
+				c.sendError("invalid webrtc_answer structure")
+				continue
+			}
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingWebRTCAnswer{
+				Type:     "incoming_webrtc_answer",
+				FromUser: c.UserID,
+				ChatType: payload.ChatType,
+				Answer:   payload.Answer,
+			})
+
+		case "ice_candidate":
+			var payload common.IncomingIceCandidate
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid ice_candidate payload")
+				continue
+			}
+
+			if payload.ReceiverID == "" || payload.Candidate == nil {
+				c.sendError("invalid ice_candidate structure")
+				continue
+			}
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingIceCandidate{
+				Type:      "incoming_ice_candidate",
+				FromUser:  c.UserID,
+				ChatType:  payload.ChatType,
+				Candidate: payload.Candidate,
+			})
+
+		case "camera_status":
+			var payload common.IncomingCameraStatus
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid camera_status payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			_, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCameraStatus{
+				Type:     "incoming_camera_status",
+				FromUser: payload.UserID,
+				ChatType: payload.ChatType,
+				Enabled:  payload.Enabled,
+			})
 
 		default:
 			c.sendError("unsupported message type: " + msgType.Type)

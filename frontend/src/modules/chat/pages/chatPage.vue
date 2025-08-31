@@ -5,7 +5,7 @@
       <SideBarWindow ref="sidebarRef" class="shrink-0" />
 
       <!-- Центр: чат + инпут -->
-      <div class="flex flex-col items-center flex-grow">
+      <div class="flex flex-col items-center flex-grow h-[865px]">
         <ChatWindow
           @edit-message="handleEditMessage"
           @reply-to-message="handleReplyMessage"

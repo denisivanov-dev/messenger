@@ -76,10 +76,10 @@ const profileY = ref(0)
 
 const myId = computed(() => String(authStore.user.id))
 const onlineUsers = computed(() =>
-  chatStore.users.filter(u => u.status?.trim() === 'online')
+  Object.values(chatStore.users).filter(u => u.status?.trim() === 'online')
 )
 const offlineUsers = computed(() =>
-  chatStore.users.filter(u => u.status?.trim() === 'offline')
+  Object.values(chatStore.users).filter(u => u.status?.trim() === 'offline')
 )
 
 const isSelf = computed(() =>

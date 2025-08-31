@@ -1,74 +1,87 @@
 <template>
   <div
     :id="`msg-${props.message.message_id}`"
-    class="relative group px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-50 transition"
+    class="relative group flex items-start gap-3 px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-50 transition"
   >
-    <!-- Индикатор "изменено" и дата -->
-    <div v-if="props.message.edited_at" class="absolute top-0 right-0 mt-1 mr-2 text-[10px] text-gray-400">
-      изменено • {{ formattedEditDate }}
-    </div>
-
-    <!-- Заголовок: имя и время -->
-    <div
-      class="mb-1 text-xs flex items-center gap-1"
-      :class="props.message.pinned ? 'text-purple-800 bg-purple-100 px-1 py-0.5 rounded' : 'text-gray-500'"
-    >
-      <span>{{ props.message.username }} • {{ formattedDate }}</span>
-      <span v-if="props.message.pinned" class="flex items-center gap-1 text-xs">
-        📌 <span class="italic m-auto">Закреплено</span>
-      </span>
-    </div>
-
-    <!-- Ответ на сообщение -->
-    <div
-      v-if="props.message.reply_to"
-      class="mb-1 text-[11px] text-gray-500 border-l-2 border-blue-400 pl-2 cursor-pointer hover:text-blue-600"
-      @click="$emit('scroll-to-message', props.message.reply_to)"
-    >
-      ↩ {{ props.message.reply_to_user }}:
-      <span class="italic text-gray-500">{{ repliedMessageText }}</span>
-    </div>
-
-    <!-- Атачменты (если есть) -->
-    <MessageGallery
-      v-if="props.message.attachments && props.message.attachments.some(att => att.type === 'image')"
-      :attachments="props.message.attachments.filter(att => att.type === 'image')"
-      :imageUrls="attachmentUrls"
-      :openImage="(key) => openImage(attachmentUrls[key])"
+    <!-- Аватарка -->
+    <img
+      :src="avatarUrl"
+      class="w-8 h-8 rounded-full object-cover mt-0.5"
+      alt="аватар"
     />
 
-    <!-- Текст (если есть) -->
-    <p v-if="props.message.text" class="text-sm text-gray-900">{{ props.message.text }}</p>
-
-    <!-- Ховер-меню -->
-    <div
-      class="absolute top-0 right-0 mt-1 mr-1 hidden group-hover:flex flex-row bg-white border rounded shadow px-2 py-1 z-10 gap-2"
-    >
-      <button @click="reply" title="Ответить" class="text-blue-600 hover:text-blue-800">
-        <ReplyIcon class="w-4 h-4" />
-      </button>
-
-      <button
-        v-if="isMyMessage"
-        @click="edit"
-        title="Редактировать"
-        class="text-yellow-600 hover:text-yellow-800"
+    <!-- Контейнер контента -->
+    <div class="flex-1 relative">
+      <!-- Индикатор "изменено" и дата -->
+      <div
+        v-if="props.message.edited_at"
+        class="absolute top-0 right-0 mt-1 mr-2 text-[10px] text-gray-400"
       >
-        <EditIcon class="w-4 h-4" />
-      </button>
+        изменено • {{ formattedEditDate }}
+      </div>
 
-      <button @click="pin" title="Закрепить" class="text-purple-600 hover:text-purple-800">
-        <PinIcon class="w-4 h-4" />
-      </button>
-
-      <button
-        v-if="isMyMessage"
-        @click="remove"
-        title="Удалить"
-        class="text-red-600 hover:text-red-800"
+      <!-- Заголовок: имя и время -->
+      <div
+        class="mb-1 text-xs flex items-center gap-1"
+        :class="props.message.pinned ? 'text-purple-800 bg-purple-100 px-1 py-0.5 rounded' : 'text-gray-500'"
       >
-        <TrashIcon class="w-4 h-4" />
-      </button>
+        <span>{{ props.message.username }} • {{ formattedDate }}</span>
+        <span v-if="props.message.pinned" class="flex items-center gap-1 text-xs">
+          📌 <span class="italic m-auto">Закреплено</span>
+        </span>
+      </div>
+
+      <!-- Ответ на сообщение -->
+      <div
+        v-if="props.message.reply_to"
+        class="mb-1 text-[11px] text-gray-500 border-l-2 border-blue-400 pl-2 cursor-pointer hover:text-blue-600"
+        @click="$emit('scroll-to-message', props.message.reply_to)"
+      >
+        ↩ {{ props.message.reply_to_user }}:
+        <span class="italic text-gray-500">{{ repliedMessageText }}</span>
+      </div>
+
+      <!-- Атачменты (если есть) -->
+      <MessageGallery
+        v-if="props.message.attachments && props.message.attachments.some(att => att.type === 'image')"
+        :attachments="props.message.attachments.filter(att => att.type === 'image')"
+        :imageUrls="attachmentUrls"
+        :openImage="(key) => openImage(attachmentUrls[key])"
+      />
+
+      <!-- Текст (если есть) -->
+      <p v-if="props.message.text" class="text-sm text-gray-900">{{ props.message.text }}</p>
+
+      <!-- Ховер-меню -->
+      <div
+        class="absolute top-0 right-0 mt-1 mr-1 hidden group-hover:flex flex-row bg-white border rounded shadow px-2 py-1 z-10 gap-2"
+      >
+        <button @click="reply" title="Ответить" class="text-blue-600 hover:text-blue-800">
+          <ReplyIcon class="w-4 h-4" />
+        </button>
+
+        <button
+          v-if="isMyMessage"
+          @click="edit"
+          title="Редактировать"
+          class="text-yellow-600 hover:text-yellow-800"
+        >
+          <EditIcon class="w-4 h-4" />
+        </button>
+
+        <button @click="pin" title="Закрепить" class="text-purple-600 hover:text-purple-800">
+          <PinIcon class="w-4 h-4" />
+        </button>
+
+        <button
+          v-if="isMyMessage"
+          @click="remove"
+          title="Удалить"
+          class="text-red-600 hover:text-red-800"
+        >
+          <TrashIcon class="w-4 h-4" />
+        </button>
+      </div>
     </div>
   </div>
 
@@ -99,12 +112,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ReplyIcon, EditIcon, PinIcon, TrashIcon } from 'lucide-vue-next'
+import { ReplyIcon, EditIcon, PinIcon, TrashIcon, Users } from 'lucide-vue-next'
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
 import { loadAttachmentUrls } from '../../../utils/attachmentUtils'
 import MessageGallery from './messageGallery.vue'
 
+const chatStore = useChatStore()
+const authStore = useAuthStore()
 
 const emit = defineEmits(['reply-to-message', 'edit-message', 'scroll-to-message'])
 const props = defineProps({
@@ -113,6 +128,9 @@ const props = defineProps({
     required: true
   }
 })
+
+const user = computed(() => chatStore.users[String(props.message.user_id)] || {})
+const avatarUrl = computed(() => user.value.avatar_url)
 
 const attachmentUrls = ref({})
 const fullscreenImageUrl = ref(null)
@@ -139,8 +157,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onEsc)
 })
 
-const chatStore = useChatStore()
-const authStore = useAuthStore()
 const isMyMessage = props.message.user_id == authStore.getUserId
 const onlyImage = computed(() => {
   return (

@@ -165,3 +165,9 @@ export async function apiGetFriends(userId) {
 
   return response.data
 }
+
+export async function getCallRoomStatus(roomId) {
+  const response = await axiosInstance.get(`/api/voice/${roomId}`)
+
+  return response.data
+}
