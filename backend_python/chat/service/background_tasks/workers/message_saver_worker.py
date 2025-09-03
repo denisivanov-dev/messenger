@@ -1,24 +1,26 @@
-import asyncio, json
-import redis.asyncio as redis
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+import asyncio
+import json
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend_python.config import DB_URL
 from backend_python.chat.repository.message_repo import (
-    save_message_to_global_chat, save_private_message
+    save_message_to_global_chat,
+    save_private_message,
 )
 from backend_python.chat.repository.chat_repo import get_private_chat_keys
-
-engine = create_async_engine(DB_URL, echo=False, pool_pre_ping=True)
-SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+from backend_python.core.redis_client import redis_client
+from backend_python.core.db_client import SessionFactory
 
 async def listen_to_save_queue(queue: str):
     while True:
-        _, data = await redis_client.blpop(queue)
-        message = json.loads(data)
+        try:
+            _, data = await redis_client.blpop(queue)
+            message = json.loads(data)
 
-        async with SessionFactory() as db:
-            await process_save_message(queue, message, db)
+            async with SessionFactory() as db:
+                await process_save_message(queue, message, db)
+
+        except Exception as e:
+            print(f"Ошибка при получении или обработке сообщения из очереди [{queue}]:", e)
 
 async def process_save_message(queue: str, message: dict, db: AsyncSession):
     print("Сохраняю:", queue, message)
@@ -26,8 +28,8 @@ async def process_save_message(queue: str, message: dict, db: AsyncSession):
     attachments = message.get("attachments", [])
     reply_to_id = message.get("reply_to")
 
-    if queue == "to_save:global":
-        try:
+    try:
+        if queue == "to_save:global":
             await save_message_to_global_chat(
                 db=db,
                 message_id=message["message_id"],
@@ -37,11 +39,8 @@ async def process_save_message(queue: str, message: dict, db: AsyncSession):
                 reply_to_id=reply_to_id,
                 attachments=attachments
             )
-        except Exception as e:
-            print("❌ Ошибка при сохранении глобального:", e)
 
-    elif queue.startswith("to_save:private:"):
-        try:
+        elif queue.startswith("to_save:private:"):
             await save_private_message(
                 db=db,
                 chat_key=message["chat_id"],
@@ -52,8 +51,9 @@ async def process_save_message(queue: str, message: dict, db: AsyncSession):
                 reply_to_id=reply_to_id,
                 attachments=attachments
             )
-        except Exception as e:
-            print("❌ Ошибка при сохранении приватного:", e)
+
+    except Exception as e:
+        print(f"Ошибка при сохранении сообщения из {queue}:", e)
 
 async def start_save_listener():
     async with SessionFactory() as db:

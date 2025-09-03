@@ -1,15 +1,11 @@
-import asyncio, json
-import redis.asyncio as redis
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+import asyncio
+import json
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend_python.config import DB_URL
 from backend_python.chat.repository.message_repo import fetch_messages_by_chat_id
 from backend_python.chat.utils.user_utils import fetch_usernames_map
-
-engine = create_async_engine(DB_URL, echo=False, pool_pre_ping=True)
-SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
-
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+from backend_python.core.redis_client import redis_client
+from backend_python.core.db_client import SessionFactory
 
 async def preload_global_chat_history():
     chat_id = 1

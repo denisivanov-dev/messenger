@@ -4,11 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from sqlalchemy.orm import selectinload
 import json
-import redis.asyncio as redis
 
+from backend_python.core.redis_client import redis_client
 from backend_python.chat.utils import user_utils, message_utils
-
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
 async def get_or_create_private_chat(db: AsyncSession, user1_id: int, user2_id: int):
     chat_key = user_utils.generate_private_chat_key(user1_id, user2_id)

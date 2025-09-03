@@ -1,20 +1,14 @@
-import asyncio, json
-import redis.asyncio as redis
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-
-from backend_python.config import DB_URL
+import asyncio
+import json
 from backend_python.chat.repository.user_repo import get_all_users
-
-engine = create_async_engine(DB_URL, echo=False, pool_pre_ping=True)
-SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
-
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+from backend_python.core.redis_client import redis_client
+from backend_python.core.db_client import SessionFactory  # ✅ заменено
 
 GLOBAL_CHAT_ID = 1  
 
 async def load_all_chat_ids():
     async with SessionFactory() as db:
-        user_list = await get_all_users(db) 
+        user_list = await get_all_users(db)
 
     pipe = redis_client.pipeline()
 

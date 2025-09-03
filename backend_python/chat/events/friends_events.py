@@ -1,7 +1,5 @@
-import redis.asyncio as redis
+from backend_python.core.redis_client import redis_client
 import json
-
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
 async def queue_friend_event(event: dict):
     await redis_client.rpush("to_save:friend_events", json.dumps(event))

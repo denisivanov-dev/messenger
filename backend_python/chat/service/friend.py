@@ -1,10 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-import redis.asyncio as redis
 import backend_python.chat.repository.friends_repo as friends_repo
 from fastapi import status
 from fastapi.responses import JSONResponse
-
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+from backend_python.core.redis_client import redis_client
 
 async def get_friend_status_map(db: AsyncSession, user_id: int):
     friends_key = f"user:{user_id}:friends"

@@ -3,9 +3,7 @@ from backend_python.auth.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Tuple, List
-import redis.asyncio as redis
-
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+from backend_python.core.redis_client import redis_client
 
 async def get_username_by_id(db: AsyncSession, user_id: int) -> str | None:
     query = select(User.username).where(User.id == user_id)

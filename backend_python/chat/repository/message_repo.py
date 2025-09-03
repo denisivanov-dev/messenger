@@ -4,10 +4,9 @@ from backend_python.chat.models import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-import redis.asyncio as redis
 from sqlalchemy.orm import aliased, selectinload
 
-redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+from backend_python.core.redis_client import redis_client
 
 ReplyMsg = aliased(Message)
 ReplyUser = aliased(User)
