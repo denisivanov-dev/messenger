@@ -32,7 +32,7 @@ export const useFriendsStore = defineStore('friends', () => {
     Object.entries(statusMap).forEach(([id, status]) => {
       friendStatusCache.value[id] = status
     })
-
+    console.info(statusMap)
     return statusMap
   }
 

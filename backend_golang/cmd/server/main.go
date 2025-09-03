@@ -1,25 +1,38 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
-	"messenger/backend_golang/internal/ws"
 	"messenger/backend_golang/internal/pubsub"
-	"context"
+	"messenger/backend_golang/internal/ws"
 )
 
 func main() {
+	_ = godotenv.Load()
+
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+
+	listenAddr := os.Getenv("LISTEN_ADDR")
+	if listenAddr == "" {
+		listenAddr = ":8080"
+	}
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "redis:6379",
-        Password: "",
-	    DB:       0,
+		Addr:     redisAddr,
+		Password: "",
+		DB:       0,
 	})
 
 	ctx := context.Background()
-	err := rdb.Ping(ctx).Err()
-	if err != nil {
+	if err := rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("Redis недоступен: %v", err)
 	}
 
@@ -32,9 +45,8 @@ func main() {
 		ws.ServeWS(hub, rdb, w, r)
 	})
 
-	// err = http.ListenAndServe(":8080", nil)
-	err = http.ListenAndServe("0.0.0.0:8080", nil)
-	if err != nil {
+	log.Printf("Сервер слушает %s...", listenAddr)
+	if err := http.ListenAndServe(listenAddr, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }

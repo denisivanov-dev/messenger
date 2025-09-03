@@ -27,10 +27,8 @@
           >
             <!-- ВИДЕО если камера включена -->
             <video
-              v-if="userHasLiveVideo(user.id)"
-              :ref="String(user.id) === String(currentUserID)
-                ? localVideoRef
-                : el => registerVideoEl(user.id, el)"
+              v-if="cameraStatusMap[user.id]"
+              :ref="el => registerVideoEl(user.id, el)"
               autoplay
               playsinline
               muted
@@ -194,10 +192,26 @@
       {{ localTracksDebug }}
     </pre>
   </div>
+
+  <!-- DEBUG: Видео-треки remoteStreams -->
+  <div class="fixed bottom-24 left-2 mb-40 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
+    <div class="font-semibold mb-1">remoteStreams.getVideoTracks():</div>
+    <pre class="whitespace-pre-wrap break-words">
+      {{ remoteTracksDebug }}
+    </pre>
+  </div>
+
+  <!-- DEBUG: hasLiveVideo для всех участников -->
+  <div class="fixed bottom-24 right-2 mb-40 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
+    <div class="font-semibold mb-1">hasLiveVideo(userId):</div>
+    <pre class="whitespace-pre-wrap break-words">
+      {{ debugLiveVideoMap }}
+    </pre>
+  </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
@@ -224,15 +238,30 @@ const localTracksDebug = computed(() => {
   }))
 })
 
-const localVideoRef = ref(null)
-watch(
-  () => mediaStore.localStream,
-  (stream) => {
-    if (localVideoRef.value) {
-      localVideoRef.value.srcObject = stream || null
-    }
+const remoteTracksDebug = computed(() => {
+  const debug = {}
+  for (const [userId, stream] of Object.entries(mediaStore.remoteStreams)) {
+    const tracks = stream?.getVideoTracks?.() ?? []
+    debug[userId] = tracks.map(track => ({
+      id: track.id,
+      label: track.label,
+      enabled: track.enabled,
+      readyState: track.readyState,
+      kind: track.kind
+    }))
   }
-)
+  return debug
+})
+
+const debugLiveVideoMap = computed(() => {
+  const map = {}
+  for (const user of joinedParticipants.value) {
+    map[user.id] = userHasLiveVideo(user.id)
+  }
+  return map
+})
+
+const localVideoRef = ref(null)
 
 const joinedParticipants = computed(() => {
   return Object.entries(callStore.callMembers)
@@ -288,15 +317,13 @@ const anyoneWithCam = computed(() => {
     .some(([id, status]) => status === 'joined' && map[String(id)] === true)
 })
 
-watch(
-  () => mediaStore.localStream,
-  (stream) => {
-    if (localVideoRef.value) {
-      localVideoRef.value.srcObject = stream || null
-    }
-  },
-  { immediate: true }
-)
+watchEffect(() => {
+  const videoEl = localVideoRef.value
+  const stream = mediaStore.localStream
+  if (videoEl && stream) {
+    videoEl.srcObject = stream
+  }
+})
 </script>
 
 <style scoped>

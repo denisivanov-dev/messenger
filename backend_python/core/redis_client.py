@@ -1,5 +1,8 @@
 import os
 import redis.asyncio as redis
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_redis_url() -> str:
     if url := os.getenv("REDIS_URL"):

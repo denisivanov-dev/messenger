@@ -272,6 +272,8 @@ export const useMediaStore = defineStore('media', () => {
       })
 
       applyCamStateToLocalStream()
+
+      remoteStreams.value[authStore.getUserId] = localStream.value
     } catch (err) {
       console.warn('[initMediaTracks] Камера не получена:', err)
     }

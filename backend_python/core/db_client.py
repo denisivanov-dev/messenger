@@ -1,5 +1,8 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_db_url() -> str:
     if url := os.getenv("DATABASE_URL"):

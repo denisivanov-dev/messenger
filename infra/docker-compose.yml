@@ -58,8 +58,8 @@ services:
       GOTOOLCHAIN: auto
     command: >
       sh -c "go mod download &&
-             go install github.com/air-verse/air@latest &&
-             air -c .air.toml"
+            go install github.com/air-verse/air@latest &&
+            air -c .air.docker.toml"
     ports:
       - "8080:8080"
 

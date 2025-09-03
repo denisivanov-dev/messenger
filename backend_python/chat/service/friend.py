@@ -6,7 +6,7 @@ from backend_python.core.redis_client import redis_client
 
 async def get_friend_status_map(db: AsyncSession, user_id: int):
     friends_key = f"user:{user_id}:friends"
-    incoming_key = f"user:{user_id}:pending"
+    incoming_key = f"user:{user_id}:incoming"
     outgoing_key = f"user:{user_id}:outgoing"
 
     keys_exist = await redis_client.exists(friends_key, incoming_key, outgoing_key)
@@ -34,7 +34,7 @@ async def get_friend_status_map(db: AsyncSession, user_id: int):
     for fid in friends_ids:
         status_map[fid] = "friends"
     for fid in incoming_ids:
-        status_map[fid] = "pending"
+        status_map[fid] = "incoming"
     for fid in outgoing_ids:
         status_map[fid] = "outgoing"
 
