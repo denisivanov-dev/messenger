@@ -14,6 +14,8 @@ export const useMediaStore = defineStore('media', () => {
   const remoteAudioElements = ref({})
   const remoteVideoElements = ref({})
 
+  const speakingUsers = ref(new Set())
+
   const micSettings = ref({
     enabled: true,
     deviceId: null,
@@ -75,6 +77,124 @@ export const useMediaStore = defineStore('media', () => {
       track.enabled = shouldEnable
     })
   }
+
+  function startLocalVoiceDetection(userId) {
+    if (!localStream.value) {
+      console.warn('Нет localStream, не запускаем VAD')
+      return
+    }
+
+    console.log('✅ VAD запущен для', userId)
+
+    const audioCtx = new AudioContext()
+    const source = audioCtx.createMediaStreamSource(localStream.value)
+    const analyser = audioCtx.createAnalyser()
+
+    analyser.fftSize = 2048
+    const data = new Uint8Array(analyser.fftSize)
+
+    source.connect(analyser)
+
+    const detect = () => {
+      analyser.getByteTimeDomainData(data)
+
+      let sum = 0
+      for (let i = 0; i < data.length; i++) {
+        const val = (data[i] - 128) / 128
+        sum += val * val
+      }
+
+      const volume = Math.sqrt(sum / data.length)
+
+      if (volume > 0.03) {
+        speakingUsers.value.add(Number(userId))
+      } else {
+        speakingUsers.value.delete(Number(userId))
+      }
+      // console.log('🎤 volume =', volume.toFixed(4))
+      requestAnimationFrame(detect)
+    }
+
+    detect()
+  }
+
+  function startVoiceDetectionForUser(userId, audioElement) {
+    if (!audioElement || audioElement.__vadInitialized) return
+
+    audioElement.__vadInitialized = true
+
+    console.log('✅ [VAD] Запуск для userId:', userId)
+
+    const audioCtx = new AudioContext()
+    audioCtx.resume().catch(err => {
+      console.warn('⚠️ [VAD] Ошибка resume AudioContext:', err)
+    })
+
+    const src = audioElement?.srcObject
+    const tracks = src?.getAudioTracks?.() || []
+
+    console.log('🔍 [VAD] Статус источника:', {
+      hasEl: !!audioElement,
+      srcObject: src,
+      trackCount: tracks.length,
+      enabled: tracks.map(t => t.enabled),
+      muted: audioElement.muted,
+      volume: audioElement.volume,
+    })
+
+    if (!src) {
+      console.warn(`❌ [VAD] srcObject отсутствует у audioElement для userId=${userId}`)
+      return
+    }
+
+    if (tracks.length === 0) {
+      console.warn(`❌ [VAD] Нет аудиотреков в srcObject для userId=${userId}`)
+    }
+
+    try {
+      const stream = audioElement.srcObject
+      if (!stream) {
+        console.warn(`❌ [VAD] Нет srcObject для audioElement (userId=${userId})`)
+        return
+      }
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+
+      analyser.fftSize = 2048
+      const data = new Uint8Array(analyser.fftSize)
+
+      source.connect(analyser)
+      analyser.connect(audioCtx.destination) // критично!
+
+      const detect = () => {
+        analyser.getByteTimeDomainData(data)
+
+        let sum = 0
+        for (let i = 0; i < data.length; i++) {
+          const val = (data[i] - 128) / 128
+          sum += val * val
+        }
+
+        const volume = Math.sqrt(sum / data.length)
+
+        const isSpeaking = volume > 0.03
+        const idNum = Number(userId)
+
+        if (isSpeaking && !speakingUsers.value.has(idNum)) {
+          speakingUsers.value.add(idNum)
+        } else if (!isSpeaking && speakingUsers.value.has(idNum)) {
+          speakingUsers.value.delete(idNum)
+        }
+
+        requestAnimationFrame(detect)
+      }
+
+      detect()
+    } catch (err) {
+      console.warn(`❌ [VAD] Ошибка при инициализации для userId=${userId}:`, err)
+    }
+  }
+
 
   function applyCamStateToLocalStream() {
     if (!localStream.value) return
@@ -153,20 +273,18 @@ export const useMediaStore = defineStore('media', () => {
     const newStream = await navigator.mediaDevices.getUserMedia(constraints)
     localStream.value ??= new MediaStream()
 
-    // Удаляем старые треки
     localStream.value.getVideoTracks().forEach(t => {
       localStream.value.removeTrack(t)
       t.stop()
     })
 
-    // Добавляем новые
     newStream.getVideoTracks().forEach(track => {
-      track.enabled = true // ✅ всегда true
+      track.enabled = true
       localStream.value.addTrack(track)
       replaceVideoTrack(track)
     })
 
-    applyCamStateToLocalStream() // ✅ применяем видимость
+    applyCamStateToLocalStream()
   }
 
   function replaceVideoTrack(newTrack) {
@@ -220,10 +338,26 @@ export const useMediaStore = defineStore('media', () => {
   function registerAudioElement(userId, el) {
     if (!el) return
     remoteAudioElements.value[userId] = el
+
     const stream = remoteStreams.value[userId]
     if (stream) {
       el.srcObject = stream
       el.play().catch(() => {})
+      setTimeout(() => {
+        startVoiceDetectionForUser(userId, el)
+      }, 300) // короткая задержка, чтобы srcObject успел подхватиться
+    } else {
+      const interval = setInterval(() => {
+        const stream = remoteStreams.value[userId]
+        if (stream) {
+          clearInterval(interval)
+          el.srcObject = stream
+          el.play().catch(() => {})
+          setTimeout(() => {
+            startVoiceDetectionForUser(userId, el)
+          }, 300)
+        }
+      }, 200)
     }
   }
 
@@ -245,6 +379,7 @@ export const useMediaStore = defineStore('media', () => {
 
   async function initMediaTracks() {
     await setMicDevice(micSettings.value.deviceId)
+    startLocalVoiceDetection(authStore.getUserId)
 
     const deviceId = camSettings.value.deviceId
     const constraints = {
@@ -301,6 +436,7 @@ export const useMediaStore = defineStore('media', () => {
     camSettings,
     isMuted,
     isCamOff,
+    speakingUsers,
 
     toggleMute,
     toggleCamera,
@@ -315,6 +451,9 @@ export const useMediaStore = defineStore('media', () => {
     registerVideoElement,
     cleanupAllRemoteStreams,
     initMediaTracks,
-    hasLiveVideo
+    hasLiveVideo,
+
+    startLocalVoiceDetection,
+    startVoiceDetectionForUser
   }
 })

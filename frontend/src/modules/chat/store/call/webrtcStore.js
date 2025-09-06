@@ -69,23 +69,12 @@ export const useWebRTCStore = defineStore('webrtc', () => {
   }
 
   async function startCall(userId, isCaller) {
-    // await mediaStore.setMicDevice(mediaStore.micSettings.deviceId)
-
-    // if (mediaStore.camSettings.enabled) {
-    //   await mediaStore.setCamDevice(mediaStore.camSettings.deviceId)
-    // }
     await mediaStore.initMediaTracks()
 
     await createPeerConnection(userId, isCaller)
   }
 
   async function handleOffer(from, offer) {
-    // if (!mediaStore.localStream) {
-    //   await mediaStore.setMicDevice(mediaStore.micSettings.deviceId)
-    //   if (mediaStore.camSettings.enabled) {
-    //     await mediaStore.setCamDevice(mediaStore.camSettings.deviceId)
-    //   }
-    // }
     await mediaStore.initMediaTracks()
 
     await createPeerConnection(from, false)

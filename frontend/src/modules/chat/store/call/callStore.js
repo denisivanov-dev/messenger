@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, reactive} from 'vue'
+import { ref} from 'vue'
 import { useChatStore } from '../chatStore'
 import { useAuthStore } from '../../../auth/store/authStore'
 import { useWebRTCStore } from './webrtcStore'

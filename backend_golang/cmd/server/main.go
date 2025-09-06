@@ -17,12 +17,12 @@ func main() {
 
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
-		redisAddr = "localhost:6379"
+		redisAddr = "redis:6379"
 	}
 
 	listenAddr := os.Getenv("LISTEN_ADDR")
 	if listenAddr == "" {
-		listenAddr = ":8080"
+		listenAddr = "0.0.0.0:8080"
 	}
 
 	rdb := redis.NewClient(&redis.Options{
