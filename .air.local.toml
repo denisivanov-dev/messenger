@@ -1,0 +1,28 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "tmp\\main.exe"                # для Windows
+  cmd = "go build -o ./tmp/main.exe ./backend_golang/cmd/server/main.go"
+  full_bin = ""
+  delay = 1000
+  exclude_dir = ["assets", "tmp", "vendor", "testdata"]
+  exclude_regex = ["_test.go"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  log = "build-errors.log"
+
+[build.linux]
+  bin = "tmp/main"                     # для Linux
+  cmd = "go build -o ./tmp/main ./backend_golang/cmd/server/main.go"
+
+[color]
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+
+[misc]
+  clean_on_exit = false
+
+[screen]
+  clear_on_rebuild = true
+  keep_scroll = true

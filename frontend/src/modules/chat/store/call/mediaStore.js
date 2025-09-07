@@ -10,11 +10,15 @@ export const useMediaStore = defineStore('media', () => {
   const callStore = useCallStore()
 
   const localStream = ref(null)
+  const localScreenStream = ref(null)
   const remoteStreams = ref({})
   const remoteAudioElements = ref({})
   const remoteVideoElements = ref({})
 
   const speakingUsers = ref(new Set())
+  const vadContexts = {}
+  const lastSpeakingMap = {}
+  const speakingDebounceMs = 300
 
   const micSettings = ref({
     enabled: true,
@@ -26,11 +30,16 @@ export const useMediaStore = defineStore('media', () => {
     deviceId: null,
   })
 
+  const screenSettings = ref({
+    enabled: false,
+  })
+
   const isMuted = computed(() => !micSettings.value.enabled)
   const isCamOff = computed(() => !camSettings.value.enabled)
 
   const micKeyForUser = () => `call:mic:${String(authStore.getUserId)}`
   const camKeyForUser = () => `call:cam:${String(authStore.getUserId)}`
+  const screenKeyForUser = () => `call:screen:${String(authStore.getUserId)}`
 
   function loadMicSettings() {
     try {
@@ -70,6 +79,24 @@ export const useMediaStore = defineStore('media', () => {
     } catch {}
   }
 
+  function loadScreenSettings() {
+    try {
+      const raw = localStorage.getItem(screenKeyForUser())
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        screenSettings.value = {
+          enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : false
+        }
+      }
+    } catch {}
+  }
+
+  function saveScreenSettings() {
+    try {
+      localStorage.setItem(screenKeyForUser(), JSON.stringify(screenSettings.value))
+    } catch {}
+  }
+
   function applyMicStateToLocalStream() {
     if (!localStream.value) return
     const shouldEnable = micSettings.value.enabled
@@ -80,13 +107,21 @@ export const useMediaStore = defineStore('media', () => {
 
   function startLocalVoiceDetection(userId) {
     if (!localStream.value) {
-      console.warn('Нет localStream, не запускаем VAD')
+      console.warn('❌ Нет localStream, не запускаем VAD')
       return
     }
 
-    console.log('✅ VAD запущен для', userId)
+    console.log('✅ VAD запущен для local user', userId)
 
-    const audioCtx = new AudioContext()
+    if (!vadContexts[userId]) {
+      vadContexts[userId] = new AudioContext()
+    }
+
+    const audioCtx = vadContexts[userId]
+    audioCtx.resume().catch(err => {
+      console.warn('⚠️ [VAD] Ошибка resume AudioContext:', err)
+    })
+
     const source = audioCtx.createMediaStreamSource(localStream.value)
     const analyser = audioCtx.createAnalyser()
 
@@ -105,13 +140,22 @@ export const useMediaStore = defineStore('media', () => {
       }
 
       const volume = Math.sqrt(sum / data.length)
+      const isSpeaking = volume > 0.03
+      const idNum = Number(userId)
+      const now = Date.now()
 
-      if (volume > 0.03) {
-        speakingUsers.value.add(Number(userId))
-      } else {
-        speakingUsers.value.delete(Number(userId))
+      const last = lastSpeakingMap[idNum] || { state: null, changed: 0 }
+
+      if (isSpeaking !== last.state && now - last.changed > speakingDebounceMs) {
+        lastSpeakingMap[idNum] = { state: isSpeaking, changed: now }
+
+        if (isSpeaking) {
+          speakingUsers.value.add(idNum)
+        } else {
+          speakingUsers.value.delete(idNum)
+        }
       }
-      // console.log('🎤 volume =', volume.toFixed(4))
+
       requestAnimationFrame(detect)
     }
 
@@ -120,81 +164,70 @@ export const useMediaStore = defineStore('media', () => {
 
   function startVoiceDetectionForUser(userId, audioElement) {
     if (!audioElement || audioElement.__vadInitialized) return
-
     audioElement.__vadInitialized = true
 
     console.log('✅ [VAD] Запуск для userId:', userId)
 
-    const audioCtx = new AudioContext()
+    const stream = audioElement.srcObject
+    if (!stream) {
+      console.warn(`❌ [VAD] Нет srcObject для audioElement (userId=${userId})`)
+      return
+    }
+
+    const tracks = stream.getAudioTracks?.() || []
+    if (tracks.length === 0) {
+      console.warn(`❌ [VAD] Нет аудиотреков в srcObject для userId=${userId}`)
+      return
+    }
+
+    if (!vadContexts[userId]) {
+      vadContexts[userId] = new AudioContext()
+    }
+
+    const audioCtx = vadContexts[userId]
     audioCtx.resume().catch(err => {
       console.warn('⚠️ [VAD] Ошибка resume AudioContext:', err)
     })
 
-    const src = audioElement?.srcObject
-    const tracks = src?.getAudioTracks?.() || []
+    const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
 
-    console.log('🔍 [VAD] Статус источника:', {
-      hasEl: !!audioElement,
-      srcObject: src,
-      trackCount: tracks.length,
-      enabled: tracks.map(t => t.enabled),
-      muted: audioElement.muted,
-      volume: audioElement.volume,
-    })
+    analyser.fftSize = 2048
+    const data = new Uint8Array(analyser.fftSize)
 
-    if (!src) {
-      console.warn(`❌ [VAD] srcObject отсутствует у audioElement для userId=${userId}`)
-      return
-    }
+    source.connect(analyser)
 
-    if (tracks.length === 0) {
-      console.warn(`❌ [VAD] Нет аудиотреков в srcObject для userId=${userId}`)
-    }
+    const detect = () => {
+      analyser.getByteTimeDomainData(data)
 
-    try {
-      const stream = audioElement.srcObject
-      if (!stream) {
-        console.warn(`❌ [VAD] Нет srcObject для audioElement (userId=${userId})`)
-        return
+      let sum = 0
+      for (let i = 0; i < data.length; i++) {
+        const val = (data[i] - 128) / 128
+        sum += val * val
       }
-      const source = audioCtx.createMediaStreamSource(stream)
-      const analyser = audioCtx.createAnalyser()
 
-      analyser.fftSize = 2048
-      const data = new Uint8Array(analyser.fftSize)
+      const volume = Math.sqrt(sum / data.length)
+      const isSpeaking = volume > 0.03
+      const idNum = Number(userId)
+      const now = Date.now()
 
-      source.connect(analyser)
-      analyser.connect(audioCtx.destination) // критично!
+      const last = lastSpeakingMap[idNum] || { state: null, changed: 0 }
 
-      const detect = () => {
-        analyser.getByteTimeDomainData(data)
+      if (isSpeaking !== last.state && now - last.changed > speakingDebounceMs) {
+        lastSpeakingMap[idNum] = { state: isSpeaking, changed: now }
 
-        let sum = 0
-        for (let i = 0; i < data.length; i++) {
-          const val = (data[i] - 128) / 128
-          sum += val * val
-        }
-
-        const volume = Math.sqrt(sum / data.length)
-
-        const isSpeaking = volume > 0.03
-        const idNum = Number(userId)
-
-        if (isSpeaking && !speakingUsers.value.has(idNum)) {
+        if (isSpeaking) {
           speakingUsers.value.add(idNum)
-        } else if (!isSpeaking && speakingUsers.value.has(idNum)) {
+        } else {
           speakingUsers.value.delete(idNum)
         }
-
-        requestAnimationFrame(detect)
       }
 
-      detect()
-    } catch (err) {
-      console.warn(`❌ [VAD] Ошибка при инициализации для userId=${userId}:`, err)
+      requestAnimationFrame(detect)
     }
-  }
 
+    detect()
+  }
 
   function applyCamStateToLocalStream() {
     if (!localStream.value) return
@@ -224,6 +257,84 @@ export const useMediaStore = defineStore('media', () => {
     applyCamStateToLocalStream()
 
     callStore.sendCameraStatusUpdate(camSettings.value.enabled)
+  }
+
+  async function toggleScreenShare() {
+    if (screenSettings.value.enabled) {
+      await stopScreenShare()
+    } else {
+      await startScreenShare()
+    }
+  }
+
+  async function startScreenShare() {
+    try {
+      console.log('📺 Запрашиваем экран для демонстрации…')
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: 30,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      })
+
+      console.log('✅ Экран получен:', stream)
+
+      localScreenStream.value = stream
+      screenSettings.value.enabled = true
+      saveScreenSettings()
+
+      const screenTrack = stream.getVideoTracks()[0]
+      if (!screenTrack) {
+        console.warn('❌ Нет видеотрека в screen stream')
+        return
+      }
+
+      // 💥 Проверяем, что webrtcStore и peerConnections доступны
+      if (!webrtcStore || !webrtcStore.peerConnections?.value) {
+        console.warn('❌ webrtcStore или peerConnections не определены')
+      }
+
+      console.log('📦 webrtcStore', webrtcStore)
+      console.log(localScreenStream)
+      console.log(toggleScreenShare)
+      console.log(webrtcStore?.peerConnections?.value)
+
+      const pcs = Object.values(webrtcStore.peerConnections.value)
+      console.log(`📡 Подключено peer-соединений: ${pcs.length}`)
+
+      pcs.forEach((pc, index) => {
+        try {
+          pc.addTrack(screenTrack, stream)
+          console.log(`🧩 Добавлен screenTrack в peerConnection #${index}`)
+        } catch (err) {
+          console.warn(`⚠️ Не удалось добавить трек в pc #${index}`, err)
+        }
+      })
+
+      screenTrack.onended = () => {
+        console.log('📴 Демонстрация экрана завершена пользователем')
+        stopScreenShare()
+      }
+
+      callStore.sendScreenStatusUpdate(true)
+      console.log('📨 Отправлен статус "демонстрация экрана включена"')
+
+    } catch (err) {
+      console.warn('❌ Ошибка при старте демонстрации экрана:', err)
+    }
+  }
+
+  async function stopScreenShare() {
+    if (!localScreenStream.value) return
+
+    localScreenStream.value.getTracks().forEach(t => t.stop())
+    localScreenStream.value = null
+
+    screenSettings.value.enabled = false
+    saveScreenSettings()
+    callStore.sendScreenStatusUpdate(false)
   }
 
   async function setMicDevice(deviceId) {
@@ -306,11 +417,22 @@ export const useMediaStore = defineStore('media', () => {
 
   function attachRemoteStream(userId, stream) {
     remoteStreams.value[userId] = stream
+
     const audioEl = remoteAudioElements.value[userId]
     if (audioEl) {
-      audioEl.srcObject = stream
+      const isNew = audioEl.srcObject !== stream
+      if (isNew) {
+        audioEl.srcObject = stream
+        audioEl.__vadInitialized = false
+      }
       audioEl.play().catch(() => {})
+      if (!audioEl.__vadInitialized) {
+        setTimeout(() => {
+          startVoiceDetectionForUser(userId, audioEl)
+        }, 300)
+      }
     }
+
     const videoEl = remoteVideoElements.value[userId]
     if (videoEl) {
       videoEl.srcObject = stream
@@ -340,18 +462,26 @@ export const useMediaStore = defineStore('media', () => {
     remoteAudioElements.value[userId] = el
 
     const stream = remoteStreams.value[userId]
+
     if (stream) {
-      el.srcObject = stream
+      const isNew = el.srcObject !== stream
+      if (isNew) {
+        el.srcObject = stream
+        el.__vadInitialized = false
+      }
       el.play().catch(() => {})
-      setTimeout(() => {
-        startVoiceDetectionForUser(userId, el)
-      }, 300) // короткая задержка, чтобы srcObject успел подхватиться
+      if (!el.__vadInitialized) {
+        setTimeout(() => {
+          startVoiceDetectionForUser(userId, el)
+        }, 300)
+      }
     } else {
       const interval = setInterval(() => {
         const stream = remoteStreams.value[userId]
         if (stream) {
           clearInterval(interval)
           el.srcObject = stream
+          el.__vadInitialized = false
           el.play().catch(() => {})
           setTimeout(() => {
             startVoiceDetectionForUser(userId, el)
@@ -434,12 +564,15 @@ export const useMediaStore = defineStore('media', () => {
     remoteVideoElements,
     micSettings,
     camSettings,
+    screenSettings,
     isMuted,
     isCamOff,
     speakingUsers,
+    localScreenStream,
 
     toggleMute,
     toggleCamera,
+    toggleScreenShare,
     setMicDevice,
     setCamDevice,
     applyMicStateToLocalStream,
@@ -454,6 +587,12 @@ export const useMediaStore = defineStore('media', () => {
     hasLiveVideo,
 
     startLocalVoiceDetection,
-    startVoiceDetectionForUser
+    startVoiceDetectionForUser,
+    startScreenShare,
+    stopScreenShare,
+
+    loadCamSettings,
+    loadMicSettings,
+    loadScreenSettings
   }
 })

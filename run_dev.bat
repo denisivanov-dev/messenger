@@ -4,7 +4,7 @@ echo === backend_python ===
 start cmd /k "python -m uvicorn backend_python.main:app --reload"
 
 echo === backend_golang ===
-start cmd /k "air"
+start cmd /k "air -c .air.local.toml"
 
 echo === frontend ===
 start cmd /k "cd frontend && npm run dev"

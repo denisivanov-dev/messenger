@@ -55,6 +55,10 @@ export const useWebRTCStore = defineStore('webrtc', () => {
       pc.addTrack(track, mediaStore.localStream)
     })
 
+    mediaStore.localScreenStream?.getVideoTracks()?.forEach(track => {
+      pc.addTrack(track, mediaStore.localScreenStream)
+    })
+
     if (isCaller) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)

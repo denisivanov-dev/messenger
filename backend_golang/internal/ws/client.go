@@ -401,11 +401,13 @@ func (c *Client) ReadPump() {
 				continue
 			}
 
-			_, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
 			if !ok {
 				c.sendError("access denied")
 				continue
 			}
+
+			voice.SetCallMediaStatus(c.RDB, roomID, c.UserID, "cam", payload.Enabled)
 
 			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCameraStatus{
 				Type:     "incoming_camera_status",

@@ -58,12 +58,27 @@ onMounted(() => {
 
       try {
         const response = await getCallRoomStatus(roomId)
+        console.info(response)
 
         if (Object.keys(response).length > 0) {
           console.log('Активный звонок:', response)
-          callStore.callMembers = response
 
-          if (response[String(myId)] === 'joined') {
+          const members = {}
+          const cameraMap = {}
+
+          for (const [key, value] of Object.entries(response)) {
+            if (key.startsWith('cam:')) {
+              const userId = key.slice(4)
+              cameraMap[userId] = value === 'on'
+            } else {
+              members[key] = value
+            }
+          }
+
+          callStore.callMembers = members
+          callStore.cameraStatusMap = cameraMap
+
+          if (members[String(myId)] === 'joined') {
             await callStore.joinCall()
           }
         }

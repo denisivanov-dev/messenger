@@ -85,6 +85,7 @@
 
       <!-- Централизованные кнопки -->
       <div class="flex gap-2 items-center mt-2 justify-center">
+        <!-- Микрофон -->
         <button
           @click="mediaStore.toggleMute"
           :title="mediaStore.isMuted ? 'Включить микрофон' : 'Выключить микрофон'"
@@ -94,6 +95,7 @@
           <Mic v-else class="w-5 h-5 text-green-600" />
         </button>
 
+        <!-- Камера -->
         <button
           @click="mediaStore.toggleCamera"
           :title="mediaStore.isCamOff ? 'Включить камеру' : 'Выключить камеру'"
@@ -103,6 +105,17 @@
           <Video v-else class="w-5 h-5 text-green-600" />
         </button>
 
+        <!-- Демонстрация экрана -->
+        <button
+          @click="mediaStore.toggleScreenShare"
+          :title="mediaStore.screenSettings.enabled ? 'Остановить демонстрацию экрана' : 'Начать демонстрацию экрана'"
+          class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition"
+        >
+          <MonitorOff v-if="mediaStore.screenSettings.enabled" class="w-5 h-5 text-red-600" />
+          <Monitor v-else class="w-5 h-5 text-blue-600" />
+        </button>
+
+        <!-- Завершить/Присоединиться -->
         <button
           @click="handleButtonClick"
           :class="[
@@ -178,7 +191,7 @@ import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
 import { useCallStore } from '../../../store/call/callStore'
 import { useMediaStore } from '../../../store/call/mediaStore'
-import { PhoneOff, UserCheck, Mic, MicOff, Video, VideoOff } from 'lucide-vue-next'
+import { PhoneOff, UserCheck, Mic, MicOff, Video, VideoOff, Monitor, MonitorOff } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()

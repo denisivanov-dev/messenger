@@ -3,19 +3,23 @@ import { ref} from 'vue'
 import { useChatStore } from '../chatStore'
 import { useAuthStore } from '../../../auth/store/authStore'
 import { useWebRTCStore } from './webrtcStore'
+import { useMediaStore } from './mediaStore'
 import { sendMessage } from '../../api/chatApi'
 
 export const useCallStore = defineStore('call', () => {
   const authStore = useAuthStore()
   const chatStore = useChatStore()
   const webrtcStore = useWebRTCStore()
+  const mediaStore = useMediaStore()
 
   const inCall = ref(false)
   const isCalling = ref(false)
   const hasJoined = ref(false)
   const incomingCallFrom = ref(null)
   const callMembers = ref({})
+
   const cameraStatusMap = ref({})
+  const screenStatusMap = ref({})
 
   const getMyId = () => String(authStore.getUserId)
 
@@ -33,6 +37,13 @@ export const useCallStore = defineStore('call', () => {
       [String(userId)]: isEnabled
     }
     console.info(cameraStatusMap.value)
+  }
+
+  function updateScreenStatus(userId, isEnabled) {
+    screenStatusMap.value = {
+      ...screenStatusMap.value,
+      [String(userId)]: isEnabled
+    }
   }
 
   async function startRequestCall() {
@@ -118,12 +129,17 @@ export const useCallStore = defineStore('call', () => {
   async function joinCall() {
     const myId = getMyId()
 
+    mediaStore.loadMicSettings()
+    mediaStore.loadCamSettings()
+
     if (!callMembers.value[myId]) {
       setMemberStatus(myId, 'joined')
     }
 
     hasJoined.value = true
     inCall.value = true
+
+    sendCameraStatusUpdate(mediaStore.camSettings.enabled)
 
     sendMessage({
       type: 'join_call',
@@ -183,6 +199,18 @@ export const useCallStore = defineStore('call', () => {
     updateCameraStatus(String(authStore.getUserId), isEnabled)
   }
 
+  function sendScreenStatusUpdate(isEnabled) {
+    sendMessage({
+      type: 'screen_status',
+      chat_type: 'private',
+      receiver_id: chatStore.receiverID,
+      enabled: isEnabled,
+      user_id: String(authStore.getUserId)
+    })
+    
+    updateScreenStatus(String(authStore.getUserId), isEnabled)
+  }
+
   function resetCallState() {
     inCall.value = false
     isCalling.value = false
@@ -212,7 +240,10 @@ export const useCallStore = defineStore('call', () => {
     setMemberStatus,
     removeMember,
     updateCameraStatus,
+    updateScreenStatus,
+    sendScreenStatusUpdate,
     sendCameraStatusUpdate,
-    cameraStatusMap
+    cameraStatusMap,
+    screenStatusMap
   }
 })
