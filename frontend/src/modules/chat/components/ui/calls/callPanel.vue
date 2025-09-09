@@ -6,12 +6,11 @@
              w-full max-w-[1300px] bg-gray-50 border-b border-gray-200 
              px-4 py-3 shadow-md flex flex-col gap-4 items-center justify-center"
     >
-      <!-- Видео режим -->
+      <!-- Видеосетка или экраны -->
       <div
-        v-if="anyoneWithCam"
+        v-if="anyoneWithCam || anyoneWithScreen"
         class="w-full flex flex-col gap-4 items-center"
       >
-        <!-- Видео-сетка -->
         <div
           class="grid gap-3 w-full"
           :class="{
@@ -23,18 +22,32 @@
         >
           <div
             v-for="user in joinedParticipants"
-            :key="'cam-' + user.id"
+            :key="'tile-' + user.id"
             class="relative flex flex-col items-center justify-center bg-black rounded-lg overflow-hidden"
           >
+            <!-- Если есть демонстрация экрана -->
             <video
-              v-if="cameraStatusMap[user.id]"
-              :ref="el => registerVideoEl(user.id, el)"
+              v-if="callStore.screenStatusMap[user.id]"
+              :ref="el => registerScreenEl(user.id, el)"
               autoplay
               playsinline
               muted
-              class="w-full h-48 object-cover"
+              class="w-full h-48 object-cover cursor-pointer"
+              @click="openFullscreen(user.id)"
             ></video>
 
+            <!-- Если есть камера -->
+            <video
+              v-else-if="cameraStatusMap[user.id]"
+              :ref="el => registerCameraEl(user.id, el)"
+              autoplay
+              playsinline
+              muted
+              class="w-full h-48 object-cover cursor-pointer"
+              @click="openFullscreen(user.id)"
+            ></video>
+
+            <!-- Если нет ничего -->
             <div
               v-else
               class="flex flex-col items-center justify-center w-full h-48 bg-gray-800 text-white"
@@ -50,7 +63,7 @@
         </div>
       </div>
 
-      <!-- Режим без камер -->
+      <!-- Режим с круглыми аватарками -->
       <div
         v-else
         class="w-full flex flex-col gap-3 items-center justify-center min-h-[140px]"
@@ -63,7 +76,7 @@
           >
             <img
               :src="user.avatar_url || '/default-avatar.png'"
-              :class="[
+              :class="[ 
                 'w-[100px] h-[100px] rounded-full border object-cover mb-1',
                 'ring transition-all duration-200',
                 mediaStore.speakingUsers.has(Number(user.id))
@@ -142,22 +155,59 @@
     </template>
   </div>
 
-  <!-- DEBUG: Speaking users -->
+  <div
+    v-if="fullscreenVideoUserId && fullscreenStream"
+    class="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+    @click.self="closeFullscreen"
+  >
+    <video
+      ref="fullscreenVideoRef"
+      autoplay
+      playsinline
+      controls
+      class="max-w-full max-h-full rounded-lg shadow-lg"
+    ></video>
+
+    <!-- Кнопка закрытия -->
+    <button
+      @click="closeFullscreen"
+      class="absolute top-4 right-4 text-white bg-black bg-opacity-60 hover:bg-opacity-80 rounded-full p-2"
+      title="Закрыть"
+    >
+      ✕
+    </button>
+  </div>
+
+  <!-- DEBUG блоки -->
   <div class="fixed bottom-2 left-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
     <div class="font-semibold mb-1">🎙️ speakingUsers:</div>
-    <pre class="whitespace-pre-wrap break-words">
-      {{ Array.from(mediaStore.speakingUsers) }}
-    </pre>
+    <pre class="whitespace-pre-wrap break-words">{{ Array.from(mediaStore.speakingUsers) }}</pre>
   </div>
 
-  <!-- DEBUG: Аудио элементы -->
   <div class="fixed bottom-20 right-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[400px] z-50 overflow-y-auto max-h-[200px]">
     <div class="font-semibold mb-1">🔉 Remote audio elements:</div>
-    <pre class="whitespace-pre-wrap break-words">
-      {{ debugAudioElements }}
-    </pre>
+    <pre class="whitespace-pre-wrap break-words">{{ debugAudioElements }}</pre>
   </div>
 
+  <div class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[400px] z-50">
+    <div class="font-semibold mb-1">Все video-треки:</div>
+    <pre class="whitespace-pre-wrap break-words">{{ allVideoTracksDebug }}</pre>
+  </div>
+
+  <div class="fixed bottom-24 left-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
+    <div class="font-semibold mb-1">remoteStreams.getVideoTracks():</div>
+    <pre class="whitespace-pre-wrap break-words">{{ remoteTracksDebug }}</pre>
+  </div>
+
+  <div class="fixed bottom-24 right-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
+    <div class="font-semibold mb-1">remoteStreams.getVideoTracks():</div>
+    <pre class="whitespace-pre-wrap break-words">{{ remoteScreenTracksDebug }}</pre>
+  </div>
+
+  <div class="fixed bottom-2 right-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
+    <div class="font-semibold mb-1">screenStatusMap:</div>
+    <pre class="whitespace-pre-wrap break-words">{{ callStore.screenStatusMap }}</pre>
+  </div>
 </template>
 
   <!-- DEBUG: Камера статус-мап -->
@@ -165,14 +215,6 @@
     <div class="font-semibold mb-1">cameraStatusMap:</div>
     <pre class="whitespace-pre-wrap break-words">
       {{ callStore.cameraStatusMap }}
-    </pre>
-  </div> -->
-
-  <!-- DEBUG: Видео-треки remoteStreams -->
-  <!-- <div class="fixed bottom-24 left-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
-    <div class="font-semibold mb-1">remoteStreams.getVideoTracks():</div>
-    <pre class="whitespace-pre-wrap break-words">
-      {{ remoteTracksDebug }}
     </pre>
   </div> -->
 
@@ -185,7 +227,7 @@
   </div> -->
 
 <script setup>
-import { computed, ref, watchEffect, onMounted } from 'vue'
+import { computed, ref, watchEffect, onMounted, onBeforeUnmount } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
@@ -218,6 +260,14 @@ const participantsWithoutCam = computed(() =>
   joinedParticipants.value.filter(p => cameraStatusMap.value[String(p.id)] !== true)
 )
 
+const participantsWithScreen = computed(() =>
+  joinedParticipants.value.filter(p => callStore.screenStatusMap[String(p.id)])
+)
+
+const participantsWithoutScreen = computed(() =>
+  joinedParticipants.value.filter(p => !callStore.screenStatusMap[String(p.id)])
+)
+
 const hasJoined = computed(() => callStore.hasJoined)
 const callMembersCount = computed(() => Object.keys(callMembers.value).length)
 
@@ -227,7 +277,7 @@ const buttonLabel = computed(() =>
 
 const remoteTracksDebug = computed(() => {
   const debug = {}
-  for (const [userId, stream] of Object.entries(mediaStore.remoteStreams)) {
+  for (const [userId, stream] of Object.entries(mediaStore.remoteCameraStreams)) {
     const tracks = stream?.getVideoTracks?.() ?? []
     debug[userId] = tracks.map(track => ({
       id: track.id,
@@ -238,6 +288,49 @@ const remoteTracksDebug = computed(() => {
     }))
   }
   return debug
+})
+
+const remoteScreenTracksDebug = computed(() => {
+  const debug = {}
+  for (const [userId, stream] of Object.entries(mediaStore.remoteScreenStreams)) {
+    const tracks = stream?.getVideoTracks?.() ?? []
+    debug[userId] = tracks.map(track => ({
+      id: track.id,
+      label: track.label,
+      enabled: track.enabled,
+      readyState: track.readyState,
+      kind: track.kind
+    }))
+  }
+  return debug
+})
+
+const allVideoTracksDebug = computed(() => {
+  const result = {}
+
+  Object.entries(mediaStore.remoteCameraStreams).forEach(([userId, stream]) => {
+    result[userId] = result[userId] || []
+    stream.getVideoTracks().forEach(track => result[userId].push({
+      id: track.id,
+      label: track.label,
+      enabled: track.enabled,
+      readyState: track.readyState,
+      kind: track.kind
+    }))
+  })
+
+  Object.entries(mediaStore.remoteScreenStreams).forEach(([userId, stream]) => {
+    result[userId] = result[userId] || []
+    stream.getVideoTracks().forEach(track => result[userId].push({
+      id: track.id,
+      label: track.label,
+      enabled: track.enabled,
+      readyState: track.readyState,
+      kind: track.kind
+    }))
+  })
+
+  return JSON.stringify(result, null, 2)
 })
 
 const debugLiveVideoMap = computed(() => {
@@ -273,6 +366,10 @@ const debugAudioElements = computed(() => {
 
 const anyoneWithCam = computed(() => participantsWithCam.value.length > 0)
 
+const anyoneWithScreen = computed(() => {
+  return Object.values(callStore.screenStatusMap).some(v => v === true)
+})
+
 function handleButtonClick() {
   hasJoined.value ? callStore.leaveCall() : callStore.joinCall()
 }
@@ -285,9 +382,58 @@ function registerAudioEl(userId, el) {
   if (el) mediaStore.registerAudioElement(userId, el)
 }
 
-function registerVideoEl(userId, el) {
-  if (el) mediaStore.registerVideoElement(userId, el)
+function registerCameraEl(userId, el) {
+  if (el) mediaStore.registerCameraElement(userId, el)
 }
+
+function registerScreenEl(userId, el) {
+  if (el) mediaStore.registerScreenElement(userId, el)
+}
+
+const fullscreenVideoUserId = ref(null)
+
+function openFullscreen(userId) {
+  fullscreenVideoUserId.value = userId
+}
+
+function closeFullscreen() {
+  fullscreenVideoUserId.value = null
+}
+
+const fullscreenStream = computed(() => {
+  const uid = fullscreenVideoUserId.value
+  if (!uid) return null
+
+  const screen = mediaStore.remoteScreenStreams[uid]
+  if (screen) return screen
+
+  const camera = mediaStore.remoteCameraStreams[uid]
+  if (camera) return camera
+
+  return null
+})
+
+const fullscreenVideoRef = ref(null)
+
+watchEffect(() => {
+  if (!fullscreenVideoRef.value || !fullscreenStream.value) return
+  fullscreenVideoRef.value.srcObject = fullscreenStream.value
+})
+
+
+function handleKeydown(e) {
+  if (e.key === 'Escape') {
+    closeFullscreen()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <style scoped>

@@ -44,6 +44,11 @@ export const useCallStore = defineStore('call', () => {
       ...screenStatusMap.value,
       [String(userId)]: isEnabled
     }
+
+    if (!isEnabled) {
+      console.info(1111111)
+      mediaStore.removeRemoteScreenStream(userId)
+  }
   }
 
   async function startRequestCall() {

@@ -11,9 +11,13 @@ export const useMediaStore = defineStore('media', () => {
 
   const localStream = ref(null)
   const localScreenStream = ref(null)
-  const remoteStreams = ref({})
+
+  const remoteAudioStreams = ref({})
+  const remoteCameraStreams = ref({})
+  const remoteScreenStreams = ref({})
   const remoteAudioElements = ref({})
-  const remoteVideoElements = ref({})
+  const remoteCameraElements = ref({})
+  const remoteScreenElements = ref({})
 
   const speakingUsers = ref(new Set())
   const vadContexts = {}
@@ -285,6 +289,9 @@ export const useMediaStore = defineStore('media', () => {
       screenSettings.value.enabled = true
       saveScreenSettings()
 
+      remoteScreenStreams.value[authStore.getUserId] = stream
+      attachRemoteScreenStream(authStore.getUserId, stream)
+
       const screenTrack = stream.getVideoTracks()[0]
       if (!screenTrack) {
         console.warn('❌ Нет видеотрека в screen stream')
@@ -292,26 +299,19 @@ export const useMediaStore = defineStore('media', () => {
       }
 
       // 💥 Проверяем, что webrtcStore и peerConnections доступны
-      if (!webrtcStore || !webrtcStore.peerConnections?.value) {
+      if (!webrtcStore || !webrtcStore.peerConnections) {
         console.warn('❌ webrtcStore или peerConnections не определены')
+        return
       }
 
-      console.log('📦 webrtcStore', webrtcStore)
-      console.log(localScreenStream)
-      console.log(toggleScreenShare)
-      console.log(webrtcStore?.peerConnections?.value)
+      console.log('webrtcStore:', webrtcStore)
+      console.log('peerConnections:', webrtcStore.peerConnections)
 
-      const pcs = Object.values(webrtcStore.peerConnections.value)
+      const pcs = Object.values(webrtcStore.peerConnections)
       console.log(`📡 Подключено peer-соединений: ${pcs.length}`)
 
-      pcs.forEach((pc, index) => {
-        try {
-          pc.addTrack(screenTrack, stream)
-          console.log(`🧩 Добавлен screenTrack в peerConnection #${index}`)
-        } catch (err) {
-          console.warn(`⚠️ Не удалось добавить трек в pc #${index}`, err)
-        }
-      })
+      addScreenTrackToPeerConnections(screenTrack, stream)
+      webrtcStore.renegotiateWithAll()
 
       screenTrack.onended = () => {
         console.log('📴 Демонстрация экрана завершена пользователем')
@@ -335,6 +335,49 @@ export const useMediaStore = defineStore('media', () => {
     screenSettings.value.enabled = false
     saveScreenSettings()
     callStore.sendScreenStatusUpdate(false)
+
+    delete remoteScreenStreams.value[authStore.getUserId]
+    const screenEl = remoteScreenElements.value[authStore.getUserId]
+    if (screenEl) {
+      screenEl.pause()
+      screenEl.srcObject = null
+    }
+    delete remoteScreenElements.value[authStore.getUserId]
+
+    const videoTrack = localStream.value?.getVideoTracks?.()[0]
+    if (videoTrack) {
+      for (const [userId, pc] of Object.entries(webrtcStore.peerConnections)) {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video')
+        if (sender) {
+          sender.replaceTrack(videoTrack)
+          console.log('📷 Восстановлен трек камеры для', userId)
+        } else {
+          pc.addTrack(videoTrack, localStream.value)
+          console.log('📷 Камера добавлена заново для', userId)
+        }
+      }
+
+      webrtcStore.renegotiateWithAll()
+    }
+  }
+
+  function addScreenTrackToPeerConnections(screenTrack, screenStream) {
+    if (!screenTrack) return
+    if (!webrtcStore?.peerConnections) return
+
+    Object.values(webrtcStore.peerConnections).forEach(pc => {
+      const screenSenders = pc.getSenders().filter(sender =>
+        sender.track?.kind === 'video' &&
+        sender.track?.label?.toLowerCase()?.includes('screen')
+      )
+
+      const existingSender = screenSenders[0]
+      if (existingSender) {
+        existingSender.replaceTrack(screenTrack)
+      } else {
+        pc.addTrack(screenTrack, screenStream)
+      }
+    })
   }
 
   async function setMicDevice(deviceId) {
@@ -400,13 +443,14 @@ export const useMediaStore = defineStore('media', () => {
 
   function replaceVideoTrack(newTrack) {
     if (!newTrack) return
-    if (!webrtcStore?.peerConnections?.value) return
+    if (!webrtcStore?.peerConnections) return
 
-    Object.values(webrtcStore.peerConnections.value).forEach(pc => {
-      const senders = pc.getSenders().filter(s => s.track && s.track.kind === 'video')
+    Object.values(webrtcStore.peerConnections).forEach(pc => {
+      const videoSenders = pc.getSenders().filter(s => s.track?.kind === 'video')
 
-      if (senders.length > 0) {
-        senders[0].replaceTrack(newTrack)
+      const existing = videoSenders.find(s => s.track?.label === newTrack.label)
+      if (existing) {
+        existing.replaceTrack(newTrack)
       } else {
         if (localStream.value) {
           pc.addTrack(newTrack, localStream.value)
@@ -415,54 +459,94 @@ export const useMediaStore = defineStore('media', () => {
     })
   }
 
-  function attachRemoteStream(userId, stream) {
-    remoteStreams.value[userId] = stream
-
+  function attachRemoteAudioStream(userId, stream) {
     const audioEl = remoteAudioElements.value[userId]
-    if (audioEl) {
-      const isNew = audioEl.srcObject !== stream
-      if (isNew) {
-        audioEl.srcObject = stream
-        audioEl.__vadInitialized = false
-      }
-      audioEl.play().catch(() => {})
-      if (!audioEl.__vadInitialized) {
-        setTimeout(() => {
-          startVoiceDetectionForUser(userId, audioEl)
-        }, 300)
-      }
-    }
+    if (!audioEl) return
 
-    const videoEl = remoteVideoElements.value[userId]
-    if (videoEl) {
-      videoEl.srcObject = stream
-      videoEl.play().catch(() => {})
+    const isNew = audioEl.srcObject !== stream
+    if (isNew) {
+      audioEl.srcObject = stream
+      audioEl.__vadInitialized = false
+    }
+    audioEl.play().catch(() => {})
+
+    if (!audioEl.__vadInitialized) {
+      setTimeout(() => {
+        startVoiceDetectionForUser(userId, audioEl)
+      }, 300)
     }
   }
 
+  function attachRemoteCameraStream(userId, stream) {
+    const videoEl = remoteCameraElements.value[userId]
+    if (!videoEl) return
+
+    videoEl.srcObject = stream
+    videoEl.play().catch(() => {})
+  }
+
+  function attachRemoteScreenStream(userId, stream) {
+    const screenEl = remoteScreenElements.value[userId]
+    if (!screenEl) return
+
+    screenEl.srcObject = stream
+    screenEl.play().catch(() => {})
+  }
+
+  // function attachRemoteStream(userId, stream) {
+  //   const tracks = stream.getTracks()
+  //   for (const track of tracks) {
+  //     const kind = track.kind
+  //     const label = track.label.toLowerCase()
+
+  //     if (kind === 'audio') {
+  //       attachRemoteAudioStream(userId, stream)
+  //     } else if (kind === 'video') {
+  //       if (label.includes('screen') || label.includes('display')) {
+  //         remoteScreenStreams.value[userId] = stream
+  //         attachRemoteScreenStream(userId, stream)
+  //       } else {
+  //         remoteCameraStreams.value[userId] = stream
+  //         attachRemoteCameraStream(userId, stream)
+  //       }
+  //     }
+  //   }
+  // }
+
   function detachRemoteStream(userId) {
-    remoteStreams.value[userId]?.getTracks().forEach(t => t.stop())
-    delete remoteStreams.value[userId]
     const audioEl = remoteAudioElements.value[userId]
     if (audioEl) {
       audioEl.pause()
       audioEl.srcObject = null
     }
     delete remoteAudioElements.value[userId]
-    const videoEl = remoteVideoElements.value[userId]
-    if (videoEl) {
-      videoEl.pause()
-      videoEl.srcObject = null
+
+    const camEl = remoteCameraElements.value[userId]
+    if (camEl) {
+      camEl.pause()
+      camEl.srcObject = null
     }
-    delete remoteVideoElements.value[userId]
+    delete remoteCameraElements.value[userId]
+
+    remoteCameraStreams.value[userId]?.getTracks().forEach(t => t.stop())
+    delete remoteCameraStreams.value[userId]
+
+    const screenEl = remoteScreenElements.value[userId]
+    if (screenEl) {
+      screenEl.pause()
+      screenEl.srcObject = null
+    }
+    delete remoteScreenElements.value[userId]
+
+    remoteScreenStreams.value[userId]?.getTracks().forEach(t => t.stop())
+    delete remoteScreenStreams.value[userId]
   }
 
   function registerAudioElement(userId, el) {
     if (!el) return
     remoteAudioElements.value[userId] = el
 
-    const stream = remoteStreams.value[userId]
-
+    const stream = remoteAudioStreams.value[userId] 
     if (stream) {
       const isNew = el.srcObject !== stream
       if (isNew) {
@@ -477,7 +561,7 @@ export const useMediaStore = defineStore('media', () => {
       }
     } else {
       const interval = setInterval(() => {
-        const stream = remoteStreams.value[userId]
+        const stream = remoteAudioStreams.value[userId] 
         if (stream) {
           clearInterval(interval)
           el.srcObject = stream
@@ -491,10 +575,20 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function registerVideoElement(userId, el) {
+  function registerCameraElement(userId, el) {
     if (!el) return
-    remoteVideoElements.value[userId] = el
-    const stream = remoteStreams.value[userId]
+    remoteCameraElements.value[userId] = el
+    const stream = remoteCameraStreams.value[userId]
+    if (stream) {
+      el.srcObject = stream
+      el.play().catch(() => {})
+    }
+  }
+
+  function registerScreenElement(userId, el) {
+    if (!el) return
+    remoteScreenElements.value[userId] = el
+    const stream = remoteScreenStreams.value[userId]
     if (stream) {
       el.srcObject = stream
       el.play().catch(() => {})
@@ -502,8 +596,27 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   function cleanupAllRemoteStreams() {
-    for (const userId in remoteStreams.value) {
+    const userIds = new Set([
+      ...Object.keys(remoteAudioElements.value),
+      ...Object.keys(remoteCameraElements.value),
+      ...Object.keys(remoteScreenElements.value),
+    ])
+
+    for (const userId of userIds) {
       detachRemoteStream(userId)
+    }
+  }
+
+  function removeRemoteScreenStream(userId) {
+    const el = remoteScreenElements.value[userId]
+    if (el) {
+      el.pause()
+      el.srcObject = null
+      delete remoteScreenElements.value[userId]
+    }
+
+    if (remoteScreenStreams.value[userId]) {
+      delete remoteScreenStreams.value[userId]
     }
   }
 
@@ -538,7 +651,7 @@ export const useMediaStore = defineStore('media', () => {
 
       applyCamStateToLocalStream()
 
-      remoteStreams.value[authStore.getUserId] = localStream.value
+      remoteCameraStreams.value[authStore.getUserId] = localStream.value
     } catch (err) {
       console.warn('[initMediaTracks] Камера не получена:', err)
     }
@@ -549,9 +662,10 @@ export const useMediaStore = defineStore('media', () => {
       stream?.getVideoTracks?.().some(track => track.enabled && track.readyState === 'live') ?? false
 
     if (String(userId) === String(authStore.getUserId)) {
-      return checkTracks(localStream.value)
+      return checkTracks(localStream.value) || checkTracks(localScreenStream.value)
     }
-    return checkTracks(remoteStreams.value[userId])
+
+    return checkTracks(remoteCameraStreams.value[userId]) || checkTracks(remoteScreenStreams.value[userId])
   }
 
   loadMicSettings()
@@ -559,9 +673,9 @@ export const useMediaStore = defineStore('media', () => {
 
   return {
     localStream,
-    remoteStreams,
     remoteAudioElements,
-    remoteVideoElements,
+    remoteCameraElements,
+    remoteScreenElements,
     micSettings,
     camSettings,
     screenSettings,
@@ -569,6 +683,9 @@ export const useMediaStore = defineStore('media', () => {
     isCamOff,
     speakingUsers,
     localScreenStream,
+    remoteAudioStreams,
+    remoteCameraStreams,
+    remoteScreenStreams,
 
     toggleMute,
     toggleCamera,
@@ -578,10 +695,15 @@ export const useMediaStore = defineStore('media', () => {
     applyMicStateToLocalStream,
     applyCamStateToLocalStream,
 
-    attachRemoteStream,
+    // attachRemoteStream,
+    attachRemoteAudioStream,
+    attachRemoteCameraStream,
+    attachRemoteScreenStream,
     detachRemoteStream,
     registerAudioElement,
-    registerVideoElement,
+    registerCameraElement,
+    registerScreenElement,
+    addScreenTrackToPeerConnections,
     cleanupAllRemoteStreams,
     initMediaTracks,
     hasLiveVideo,
@@ -590,6 +712,7 @@ export const useMediaStore = defineStore('media', () => {
     startVoiceDetectionForUser,
     startScreenShare,
     stopScreenShare,
+    removeRemoteScreenStream,
 
     loadCamSettings,
     loadMicSettings,

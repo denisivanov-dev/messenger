@@ -118,3 +118,18 @@ type OutgoingCameraStatus struct {
 	ChatType string `json:"chat_type"` // private
 	Enabled  bool   `json:"enabled"`   // true / false
 }
+
+type IncomingScreenStatus struct {
+	Type       string `json:"type"`
+	ChatType   string `json:"chat_type"`
+	ReceiverID string `json:"receiver_id"`
+	UserID     string `json:"user_id"`
+	Enabled    bool   `json:"enabled"`
+}
+
+type OutgoingScreenStatus struct {
+	Type     string `json:"type"`
+	FromUser string `json:"from_user"`
+	ChatType string `json:"chat_type"`
+	Enabled  bool   `json:"enabled"`
+}

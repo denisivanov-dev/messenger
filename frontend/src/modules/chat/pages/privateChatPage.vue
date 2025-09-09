@@ -65,11 +65,15 @@ onMounted(() => {
 
           const members = {}
           const cameraMap = {}
+          const screenMap = {}
 
           for (const [key, value] of Object.entries(response)) {
             if (key.startsWith('cam:')) {
               const userId = key.slice(4)
               cameraMap[userId] = value === 'on'
+            } else if (key.startsWith('screen:')) {
+              const userId = key.slice(7)
+              screenMap[userId] = value === 'on'
             } else {
               members[key] = value
             }
@@ -77,6 +81,7 @@ onMounted(() => {
 
           callStore.callMembers = members
           callStore.cameraStatusMap = cameraMap
+          callStore.screenStatusMap = screenMap
 
           if (members[String(myId)] === 'joined') {
             await callStore.joinCall()

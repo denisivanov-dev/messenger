@@ -416,6 +416,33 @@ func (c *Client) ReadPump() {
 				Enabled:  payload.Enabled,
 			})
 
+		case "screen_status":
+			var payload common.IncomingScreenStatus
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid screen_status payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			voice.SetCallMediaStatus(c.RDB, roomID, c.UserID, "screen", payload.Enabled)
+
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingScreenStatus{
+				Type:     "incoming_screen_status",
+				FromUser: payload.UserID,
+				ChatType: payload.ChatType,
+				Enabled:  payload.Enabled,
+			})
+
 		default:
 			c.sendError("unsupported message type: " + msgType.Type)
 		}

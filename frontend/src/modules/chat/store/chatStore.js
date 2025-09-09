@@ -140,6 +140,10 @@ export const useChatStore = defineStore('chat', () => {
       if (msg.type === 'incoming_camera_status') {
         callStore.updateCameraStatus(msg.from_user, msg.enabled)
       }
+
+      if (msg.type === 'incoming_screen_status') {
+        callStore.updateScreenStatus(msg.from_user, msg.enabled)
+      }
             
       const shouldAutoScroll = isNearBottom()
       messagesStore.pushFromWs(msg)
