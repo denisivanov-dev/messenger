@@ -189,7 +189,7 @@
     <pre class="whitespace-pre-wrap break-words">{{ debugAudioElements }}</pre>
   </div>
 
-  <div class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[400px] z-50">
+  <div class="fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[400px] z-50">
     <div class="font-semibold mb-1">Все video-треки:</div>
     <pre class="whitespace-pre-wrap break-words">{{ allVideoTracksDebug }}</pre>
   </div>

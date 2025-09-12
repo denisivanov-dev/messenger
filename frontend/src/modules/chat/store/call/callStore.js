@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref} from 'vue'
+import { ref } from 'vue'
 import { useChatStore } from '../chatStore'
 import { useAuthStore } from '../../../auth/store/authStore'
 import { useWebRTCStore } from './webrtcStore'
@@ -29,6 +29,8 @@ export const useCallStore = defineStore('call', () => {
 
   const removeMember = (userId) => {
     delete callMembers.value[String(userId)]
+    delete cameraStatusMap.value[String(userId)]
+    delete screenStatusMap.value[String(userId)]
   }
 
   function updateCameraStatus(userId, isEnabled) {
@@ -36,7 +38,6 @@ export const useCallStore = defineStore('call', () => {
       ...cameraStatusMap.value,
       [String(userId)]: isEnabled
     }
-    console.info(cameraStatusMap.value)
   }
 
   function updateScreenStatus(userId, isEnabled) {
@@ -46,9 +47,32 @@ export const useCallStore = defineStore('call', () => {
     }
 
     if (!isEnabled) {
-      console.info(1111111)
       mediaStore.removeRemoteScreenStream(userId)
+    }
   }
+
+  function sendCameraStatusUpdate(isEnabled) {
+    sendMessage({
+      type: 'camera_status',
+      chat_type: 'private',
+      receiver_id: chatStore.receiverID,
+      enabled: isEnabled,
+      user_id: String(authStore.getUserId)
+    })
+
+    updateCameraStatus(String(authStore.getUserId), isEnabled)
+  }
+
+  function sendScreenStatusUpdate(isEnabled) {
+    sendMessage({
+      type: 'screen_status',
+      chat_type: 'private',
+      receiver_id: chatStore.receiverID,
+      enabled: isEnabled,
+      user_id: String(authStore.getUserId)
+    })
+
+    updateScreenStatus(String(authStore.getUserId), isEnabled)
   }
 
   async function startRequestCall() {
@@ -57,6 +81,7 @@ export const useCallStore = defineStore('call', () => {
     inCall.value = true
     isCalling.value = true
     hasJoined.value = true
+
     callMembers.value = {
       [myId]: 'joined',
       [String(chatStore.receiverID)]: 'calling'
@@ -89,7 +114,7 @@ export const useCallStore = defineStore('call', () => {
   function handleCallCanceled(fromUserID) {
     if (incomingCallFrom.value === fromUserID) {
       incomingCallFrom.value = null
-      callMembers.value = {}
+      removeMember(fromUserID)
     }
   }
 
@@ -116,6 +141,7 @@ export const useCallStore = defineStore('call', () => {
       receiver_id: fromUserID,
       accepted: false
     })
+
     incomingCallFrom.value = null
   }
 
@@ -192,30 +218,6 @@ export const useCallStore = defineStore('call', () => {
     }
   }
 
-  function sendCameraStatusUpdate(isEnabled) {
-    sendMessage({
-      type: 'camera_status',
-      chat_type: 'private',
-      receiver_id: chatStore.receiverID,
-      enabled: isEnabled,
-      user_id: String(authStore.getUserId)
-    })
-    
-    updateCameraStatus(String(authStore.getUserId), isEnabled)
-  }
-
-  function sendScreenStatusUpdate(isEnabled) {
-    sendMessage({
-      type: 'screen_status',
-      chat_type: 'private',
-      receiver_id: chatStore.receiverID,
-      enabled: isEnabled,
-      user_id: String(authStore.getUserId)
-    })
-    
-    updateScreenStatus(String(authStore.getUserId), isEnabled)
-  }
-
   function resetCallState() {
     inCall.value = false
     isCalling.value = false
@@ -231,6 +233,9 @@ export const useCallStore = defineStore('call', () => {
     hasJoined,
     incomingCallFrom,
     callMembers,
+    cameraStatusMap,
+    screenStatusMap,
+
     startRequestCall,
     cancelRequestCall,
     acceptCall,
@@ -242,13 +247,12 @@ export const useCallStore = defineStore('call', () => {
     handleJoinCall,
     leaveCall,
     resetCallState,
+
     setMemberStatus,
     removeMember,
     updateCameraStatus,
     updateScreenStatus,
-    sendScreenStatusUpdate,
     sendCameraStatusUpdate,
-    cameraStatusMap,
-    screenStatusMap
+    sendScreenStatusUpdate
   }
 })
