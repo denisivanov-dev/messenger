@@ -80,14 +80,17 @@ export const useWebRTCStore = defineStore('webrtc', () => {
 
       if (kind === 'audio') {
         mediaStore.remoteAudioStreams[userId] = stream
-        mediaStore.attachRemoteAudioStream(userId, stream)
+        // ИЗМЕНЕНИЕ: Убран вызов attachRemoteAudioStream, так как callPanel.vue теперь обрабатывает это
+        // mediaStore.attachRemoteAudioStream(userId, stream)
       } else if (kind === 'video') {
         if (finalIsScreen) {
           mediaStore.remoteScreenStreams[userId] = stream
-          mediaStore.attachRemoteScreenStream(userId, stream)
+          // ИЗМЕНЕНИЕ: Убран вызов attachRemoteScreenStream
+          // mediaStore.attachRemoteScreenStream(userId, stream)
         } else {
           mediaStore.remoteCameraStreams[userId] = stream
-          mediaStore.attachRemoteCameraStream(userId, stream)
+          // ИЗМЕНЕНИЕ: Убран вызов attachRemoteCameraStream
+          // mediaStore.attachRemoteCameraStream(userId, stream)
         }
       }
 

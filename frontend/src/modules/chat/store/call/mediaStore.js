@@ -1,715 +1,532 @@
-  import { defineStore } from 'pinia'
-  import { ref, computed, watch } from 'vue'
-  import { useAuthStore } from '../../../auth/store/authStore'
-  import { useWebRTCStore } from './webrtcStore'
-  import { useCallStore } from './callStore'
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { useAuthStore } from '../../../auth/store/authStore'
+import { useWebRTCStore } from './webrtcStore'
+import { useCallStore } from './callStore'
 
-  export const useMediaStore = defineStore('media', () => {
-    const authStore = useAuthStore()
-    const webrtcStore = useWebRTCStore()
-    const callStore = useCallStore()
+export const useMediaStore = defineStore('media', () => {
+  const authStore = useAuthStore()
+  // Инициализируем webrtcStore лениво, чтобы избежать циклических зависимостей
+  let webrtcStore
+  import('./webrtcStore').then(module => {
+    webrtcStore = module.useWebRTCStore()
+  })
+  
+  const callStore = useCallStore()
 
-    // === local streams ===
-    const localStream = ref(null)
-    const localScreenStream = ref(null)
+  // === local streams ===
+  const localStream = ref(null)
+  const localScreenStream = ref(null)
 
-    // === remote streams ===
-    const remoteAudioStreams = ref({})
-    const remoteCameraStreams = ref({})
-    const remoteScreenStreams = ref({})
+  // === remote streams ===
+  const remoteAudioStreams = ref({})
+  const remoteCameraStreams = ref({})
+  const remoteScreenStreams = ref({})
 
-    // === remote elements ===
-    const remoteAudioElements = ref({})
-    const remoteCameraElements = ref({})
-    const remoteScreenElements = ref({})
+  // === settings ===
+  const micSettings = ref({
+    enabled: true,
+    deviceId: null,
+  })
 
-    // === settings ===
-    const micSettings = ref({
-      enabled: true,
-      deviceId: null,
+  const camSettings = ref({
+    enabled: false,
+    deviceId: null,
+  })
+
+  const screenSettings = ref({
+    enabled: false,
+  })
+
+  // === states ===
+  const isMuted = computed(() => !micSettings.value.enabled)
+  const isCamOff = computed(() => !camSettings.value.enabled)
+  const speakingUsers = ref(new Set())
+
+  // === VAD ===
+  const vadContexts = {}
+  const lastSpeakingMap = {}
+  const speakingDebounceMs = 300
+
+  // === Redis/localStorage keys ===
+  const micKeyForUser = () => `call:mic:${String(authStore.getUserId)}`
+  const camKeyForUser = () => `call:cam:${String(authStore.getUserId)}`
+  const screenKeyForUser = () => `call:screen:${String(authStore.getUserId)}`
+  
+  // === local tracks ===
+  const localMicTrack = ref(null)
+  const localCameraTrack = ref(null)
+  const localScreenTrack = ref(null)
+
+  // === sender maps ===
+  const micSenderMap = new Map()
+  const camSenderMap = new Map()
+  const screenSenderMap = new Map()
+
+  function saveMicSettings() {
+    try {
+      localStorage.setItem(micKeyForUser(), JSON.stringify(micSettings.value))
+    } catch {}
+  }
+
+  function loadMicSettings() {
+    try {
+      const raw = localStorage.getItem(micKeyForUser())
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        micSettings.value = {
+          enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : true,
+          deviceId: parsed.deviceId ?? null,
+        }
+      }
+    } catch {}
+  }
+
+  function saveCamSettings() {
+    try {
+      localStorage.setItem(camKeyForUser(), JSON.stringify(camSettings.value))
+    } catch {}
+  }
+
+  function loadCamSettings() {
+    try {
+      const raw = localStorage.getItem(camKeyForUser())
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        camSettings.value = {
+          enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : false,
+          deviceId: parsed.deviceId ?? null,
+        }
+      }
+    } catch {}
+  }
+
+  function saveScreenSettings() {
+    try {
+      localStorage.setItem(screenKeyForUser(), JSON.stringify(screenSettings.value))
+    } catch {}
+  }
+
+  function loadScreenSettings() {
+    try {
+      const raw = localStorage.getItem(screenKeyForUser())
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        screenSettings.value = {
+          enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : false
+        }
+      }
+    } catch {}
+  }
+
+  function startVoiceDetection(userId, stream, isRemote = false, el = null) {
+    if (!stream) {
+      console.warn(`❌ [VAD] Нет stream для userId=${userId}`)
+      return
+    }
+
+    if (isRemote && el) {
+      if (el.__vadInitialized) return
+      el.__vadInitialized = true
+    }
+
+    console.log('✅ [VAD] Запуск для userId:', userId)
+
+    if (!vadContexts[userId]) {
+      vadContexts[userId] = new AudioContext()
+    }
+
+    const audioCtx = vadContexts[userId]
+    audioCtx.resume().catch(err => {
+      console.warn('⚠️ [VAD] Ошибка resume AudioContext:', err)
     })
 
-    const camSettings = ref({
-      enabled: false,
-      deviceId: null,
-    })
+    const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 2048
+    const data = new Uint8Array(analyser.fftSize)
 
-    const screenSettings = ref({
-      enabled: false,
-    })
+    source.connect(analyser)
 
-    // === states ===
-    const isMuted = computed(() => !micSettings.value.enabled)
-    const isCamOff = computed(() => !camSettings.value.enabled)
-    const speakingUsers = ref(new Set())
+    const detect = () => {
+      analyser.getByteTimeDomainData(data)
 
-    // === VAD ===
-    const vadContexts = {}
-    const lastSpeakingMap = {}
-    const speakingDebounceMs = 300
+      let sum = 0
+      for (let i = 0; i < data.length; i++) {
+        const val = (data[i] - 128) / 128
+        sum += val * val
+      }
 
-    // === Redis/localStorage keys ===
-    const micKeyForUser = () => `call:mic:${String(authStore.getUserId)}`
-    const camKeyForUser = () => `call:cam:${String(authStore.getUserId)}`
-    const screenKeyForUser = () => `call:screen:${String(authStore.getUserId)}`
-    
-    // === local tracks ===
-    const localMicTrack = ref(null)
-    const localCameraTrack = ref(null)
-    const localScreenTrack = ref(null)
+      const volume = Math.sqrt(sum / data.length)
+      const isSpeaking = volume > 0.03
+      const idNum = Number(userId)
+      const now = Date.now()
 
-    // === sender maps ===
-    const micSenderMap = new Map()
-    const camSenderMap = new Map()
-    const screenSenderMap = new Map()
+      const last = lastSpeakingMap[idNum] || { state: null, changed: 0 }
 
-    function saveMicSettings() {
-      try {
-        localStorage.setItem(micKeyForUser(), JSON.stringify(micSettings.value))
-      } catch {}
-    }
+      if (isSpeaking !== last.state && now - last.changed > speakingDebounceMs) {
+        lastSpeakingMap[idNum] = { state: isSpeaking, changed: now }
 
-    function loadMicSettings() {
-      try {
-        const raw = localStorage.getItem(micKeyForUser())
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          micSettings.value = {
-            enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : true,
-            deviceId: parsed.deviceId ?? null,
-          }
+        if (isSpeaking) {
+          speakingUsers.value.add(idNum)
+        } else {
+          speakingUsers.value.delete(idNum)
         }
-      } catch {}
+      }
+
+      requestAnimationFrame(detect)
     }
 
-    function saveCamSettings() {
-      try {
-        localStorage.setItem(camKeyForUser(), JSON.stringify(camSettings.value))
-      } catch {}
+    detect()
+  }
+  
+  function applyMicStateToLocalStream() {
+    const track = localStream.value?.getAudioTracks?.()[0]
+    if (track) {
+      track.enabled = micSettings.value.enabled
+    }
+  }
+
+  function applyCamStateToLocalStream() {
+    const track = localStream.value?.getVideoTracks?.()[0]
+    if (track) {
+      track.enabled = camSettings.value.enabled
+    }
+  }
+
+  function toggleMute() {
+    micSettings.value.enabled = !micSettings.value.enabled
+    saveMicSettings()
+    applyMicStateToLocalStream()
+  }
+
+  async function toggleCamera() {
+    if (camSettings.value.enabled) {
+      await stopCamera()
+    } else {
+      await startCamera()
+    }
+  }
+
+  async function toggleScreenShare() {
+    if (screenSettings.value.enabled) {
+      await stopScreenShare()
+    } else {
+      await startScreenShare()
+    }
+  }
+  
+  async function startCamera() {
+    camSettings.value.enabled = true
+    saveCamSettings()
+
+    await setCamDevice(camSettings.value.deviceId)
+
+    const track = localCameraTrack.value
+    if (!track) return
+
+    // ИЗМЕНЕНИЕ: ВОЗВРАЩАЕМ ЛОГИКУ ДЛЯ ОТОБРАЖЕНИЯ СВОЕЙ КАМЕРЫ
+    remoteCameraStreams.value[authStore.getUserId] = new MediaStream([track])
+
+    let needRenegotiate = false
+
+    for (const [userId, sender] of camSenderMap.entries()) {
+      if (!sender.track) {
+        needRenegotiate = true
+      }
+      await sender.replaceTrack(track)
     }
 
-    function loadCamSettings() {
-      try {
-        const raw = localStorage.getItem(camKeyForUser())
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          camSettings.value = {
-            enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : false,
-            deviceId: parsed.deviceId ?? null,
-          }
-        }
-      } catch {}
+    if (needRenegotiate && webrtcStore) {
+      webrtcStore.renegotiateWithAll()
     }
 
-    function saveScreenSettings() {
-      try {
-        localStorage.setItem(screenKeyForUser(), JSON.stringify(screenSettings.value))
-      } catch {}
+    callStore.sendCameraStatusUpdate(true)
+  }
+
+  async function stopCamera() {
+    camSettings.value.enabled = false
+    saveCamSettings()
+
+    const track = localCameraTrack.value
+    if (track) {
+      track.stop()
+    }
+    localCameraTrack.value = null
+
+    // ИЗМЕНЕНИЕ: УДАЛЯЕМ СВОЙ ПОТОК ИЗ СПИСКА
+    delete remoteCameraStreams.value[authStore.getUserId]
+
+    for (const sender of camSenderMap.values()) {
+      await sender.replaceTrack(null)
     }
 
-    function loadScreenSettings() {
-      try {
-        const raw = localStorage.getItem(screenKeyForUser())
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          screenSettings.value = {
-            enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : false
-          }
-        }
-      } catch {}
-    }
+    callStore.sendCameraStatusUpdate(false)
+  }
 
+  async function startScreenShare() {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: 30,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      })
 
-    function startVoiceDetection(userId, stream, isRemote = false, el = null) {
-      if (!stream) {
-        console.warn(`❌ [VAD] Нет stream для userId=${userId}`)
+      const track = stream.getVideoTracks()[0]
+      if (!track) {
+        console.warn('❌ Нет видеотрека в screen stream')
         return
       }
 
-      if (isRemote && el) {
-        if (el.__vadInitialized) return
-        el.__vadInitialized = true
-      }
+      localScreenStream.value = stream
+      localScreenTrack.value = track
+      screenSettings.value.enabled = true
+      saveScreenSettings()
 
-      console.log('✅ [VAD] Запуск для userId:', userId)
-
-      if (!vadContexts[userId]) {
-        vadContexts[userId] = new AudioContext()
-      }
-
-      const audioCtx = vadContexts[userId]
-      audioCtx.resume().catch(err => {
-        console.warn('⚠️ [VAD] Ошибка resume AudioContext:', err)
-      })
-
-      const source = audioCtx.createMediaStreamSource(stream)
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 2048
-      const data = new Uint8Array(analyser.fftSize)
-
-      source.connect(analyser)
-
-      const detect = () => {
-        analyser.getByteTimeDomainData(data)
-
-        let sum = 0
-        for (let i = 0; i < data.length; i++) {
-          const val = (data[i] - 128) / 128
-          sum += val * val
-        }
-
-        const volume = Math.sqrt(sum / data.length)
-        const isSpeaking = volume > 0.03
-        const idNum = Number(userId)
-        const now = Date.now()
-
-        const last = lastSpeakingMap[idNum] || { state: null, changed: 0 }
-
-        if (isSpeaking !== last.state && now - last.changed > speakingDebounceMs) {
-          lastSpeakingMap[idNum] = { state: isSpeaking, changed: now }
-
-          if (isSpeaking) {
-            speakingUsers.value.add(idNum)
-          } else {
-            speakingUsers.value.delete(idNum)
-          }
-        }
-
-        requestAnimationFrame(detect)
-      }
-
-      detect()
-    }
-    
-
-    function applyMicStateToLocalStream() {
-      const track = localStream.value?.getAudioTracks?.()[0]
-      if (track) {
-        track.enabled = micSettings.value.enabled
-      }
-    }
-
-    function applyCamStateToLocalStream() {
-      const track = localStream.value?.getVideoTracks?.()[0]
-      if (track) {
-        track.enabled = camSettings.value.enabled
-      }
-    }
-
-
-    function toggleMute() {
-      micSettings.value.enabled = !micSettings.value.enabled
-      saveMicSettings()
-      applyMicStateToLocalStream()
-    }
-
-    async function toggleCamera() {
-      if (camSettings.value.enabled) {
-        await stopCamera()
-      } else {
-        await startCamera()
-      }
-    }
-
-    async function toggleScreenShare() {
-      if (screenSettings.value.enabled) {
-        await stopScreenShare()
-      } else {
-        await startScreenShare()
-      }
-    }
-
-    
-    async function startCamera() {
-      camSettings.value.enabled = true
-      saveCamSettings()
-
-      await setCamDevice(camSettings.value.deviceId)
-
-      const track = localCameraTrack.value
-      if (!track) return
-
-      remoteCameraStreams.value[authStore.getUserId] = new MediaStream([track])
-      attachRemoteCameraStream(authStore.getUserId, remoteCameraStreams.value[authStore.getUserId])
+      // ИЗМЕНЕНИЕ: ВОЗВРАЩАЕМ ЛОГИКУ ДЛЯ ОТОБРАЖЕНИЯ СВОЕЙ ДЕМКИ
+      remoteScreenStreams.value[authStore.getUserId] = stream
 
       let needRenegotiate = false
 
-      for (const [userId, sender] of camSenderMap.entries()) {
+      for (const [userId, sender] of screenSenderMap.entries()) {
         if (!sender.track) {
           needRenegotiate = true
         }
         await sender.replaceTrack(track)
       }
 
-      if (needRenegotiate) {
+      if (needRenegotiate && webrtcStore) {
         webrtcStore.renegotiateWithAll()
       }
 
-      callStore.sendCameraStatusUpdate(true)
+      callStore.sendScreenStatusUpdate(true)
+
+      track.onended = () => {
+        stopScreenShare()
+      }
+    } catch (err) {
+      console.warn('❌ Ошибка при старте демонстрации экрана:', err)
     }
+  }
 
-
-    async function stopCamera() {
-      camSettings.value.enabled = false
-      saveCamSettings()
-
-      const track = localCameraTrack.value
-      if (track) {
-        track.stop()
-      }
-      localCameraTrack.value = null
-
-      delete remoteCameraStreams.value[authStore.getUserId]
-      const camEl = remoteCameraElements.value[authStore.getUserId]
-      if (camEl) {
-        camEl.pause()
-        camEl.srcObject = null
-      }
-      delete remoteCameraElements.value[authStore.getUserId]
-
-      for (const sender of camSenderMap.values()) {
-        await sender.replaceTrack(null)
-      }
-
-      callStore.sendCameraStatusUpdate(false)
+  async function stopScreenShare() {
+    const track = localScreenTrack.value
+    if (track) {
+      track.stop()
     }
+    localScreenStream.value = null
+    localScreenTrack.value = null
 
+    screenSettings.value.enabled = false
+    saveScreenSettings()
+    callStore.sendScreenStatusUpdate(false)
 
-    async function startScreenShare() {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            frameRate: 30,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        })
+    // ИЗМЕНЕНИЕ: УДАЛЯЕМ СВОЙ ПОТОК ИЗ СПИСКА
+    delete remoteScreenStreams.value[authStore.getUserId]
 
-        const track = stream.getVideoTracks()[0]
-        if (!track) {
-          console.warn('❌ Нет видеотрека в screen stream')
-          return
-        }
+    for (const sender of screenSenderMap.values()) {
+      await sender.replaceTrack(null)
+    }
+  }
+  
+  async function setMicDevice(deviceId) {
+    micSettings.value.deviceId = deviceId
+    saveMicSettings()
 
-        localScreenStream.value = stream
-        localScreenTrack.value = track
-        screenSettings.value.enabled = true
-        saveScreenSettings()
-
-        remoteScreenStreams.value[authStore.getUserId] = stream
-        attachRemoteScreenStream(authStore.getUserId, stream)
-
-        let needRenegotiate = false
-
-        for (const [userId, sender] of screenSenderMap.entries()) {
-          if (!sender.track) {
-            needRenegotiate = true
-          }
-          await sender.replaceTrack(track)
-        }
-
-        if (needRenegotiate) {
-          webrtcStore.renegotiateWithAll()
-        }
-
-        callStore.sendScreenStatusUpdate(true)
-
-        track.onended = () => {
-          stopScreenShare()
-        }
-      } catch (err) {
-        console.warn('❌ Ошибка при старте демонстрации экрана:', err)
+    const constraints = {
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 2,
+        sampleRate: 48000,
+        sampleSize: 16,
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {})
       }
     }
 
+    const newStream = await navigator.mediaDevices.getUserMedia(constraints)
+    const newTrack = newStream.getAudioTracks()[0]
+    if (!newTrack) {
+      console.warn('❌ Не удалось получить аудиотрек')
+      return
+    }
 
-    async function stopScreenShare() {
-      const track = localScreenTrack.value
-      if (track) {
-        track.stop()
-      }
-      localScreenStream.value = null
-      localScreenTrack.value = null
+    newTrack.enabled = micSettings.value.enabled
+    localMicTrack.value = newTrack
 
-      screenSettings.value.enabled = false
-      saveScreenSettings()
-      callStore.sendScreenStatusUpdate(false)
+    localStream.value ??= new MediaStream()
+    localStream.value.getAudioTracks().forEach(t => {
+      localStream.value.removeTrack(t)
+      t.stop()
+    })
+    localStream.value.addTrack(newTrack)
 
-      delete remoteScreenStreams.value[authStore.getUserId]
-      const screenEl = remoteScreenElements.value[authStore.getUserId]
-      if (screenEl) {
-        screenEl.pause()
-        screenEl.srcObject = null
-      }
-      delete remoteScreenElements.value[authStore.getUserId]
+    for (const sender of micSenderMap.values()) {
+      sender.replaceTrack(newTrack)
+    }
+  }
 
-      for (const sender of screenSenderMap.values()) {
-        await sender.replaceTrack(null)
+  async function setCamDevice(deviceId) {
+    camSettings.value.deviceId = deviceId
+    saveCamSettings()
+
+    const constraints = {
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 },
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {})
       }
     }
 
-    
-    async function setMicDevice(deviceId) {
-      micSettings.value.deviceId = deviceId
-      saveMicSettings()
-
-      const constraints = {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 2,
-          sampleRate: 48000,
-          sampleSize: 16,
-          ...(deviceId ? { deviceId: { exact: deviceId } } : {})
-        }
-      }
-
-      const newStream = await navigator.mediaDevices.getUserMedia(constraints)
-      const newTrack = newStream.getAudioTracks()[0]
-      if (!newTrack) {
-        console.warn('❌ Не удалось получить аудиотрек')
-        return
-      }
-
-      newTrack.enabled = micSettings.value.enabled
-      localMicTrack.value = newTrack
-
-      localStream.value ??= new MediaStream()
-      localStream.value.getAudioTracks().forEach(t => {
-        localStream.value.removeTrack(t)
-        t.stop()
-      })
-      localStream.value.addTrack(newTrack)
-
-      for (const sender of micSenderMap.values()) {
-        sender.replaceTrack(newTrack)
-      }
+    const newStream = await navigator.mediaDevices.getUserMedia(constraints)
+    const newTrack = newStream.getVideoTracks()[0]
+    if (!newTrack) {
+      console.warn('❌ Не удалось получить видеотрек')
+      return
     }
 
-    async function setCamDevice(deviceId) {
-      camSettings.value.deviceId = deviceId
-      saveCamSettings()
+    newTrack.enabled = camSettings.value.enabled
+    localCameraTrack.value = newTrack
 
-      const constraints = {
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
-          ...(deviceId ? { deviceId: { exact: deviceId } } : {})
-        }
-      }
+    localStream.value ??= new MediaStream()
+    localStream.value.getVideoTracks().forEach(t => {
+      localStream.value.removeTrack(t)
+      t.stop()
+    })
+    localStream.value.addTrack(newTrack)
 
-      const newStream = await navigator.mediaDevices.getUserMedia(constraints)
-      const newTrack = newStream.getVideoTracks()[0]
-      if (!newTrack) {
-        console.warn('❌ Не удалось получить видеотрек')
-        return
-      }
+    for (const sender of camSenderMap.values()) {
+      sender.replaceTrack(newTrack)
+    }
+  }
 
-      newTrack.enabled = camSettings.value.enabled
-      localCameraTrack.value = newTrack
-
-      localStream.value ??= new MediaStream()
-      localStream.value.getVideoTracks().forEach(t => {
-        localStream.value.removeTrack(t)
-        t.stop()
-      })
-      localStream.value.addTrack(newTrack)
-
-      for (const sender of camSenderMap.values()) {
-        sender.replaceTrack(newTrack)
-      }
+  function detachRemoteAudioStream(userId) {
+    const stream = remoteAudioStreams.value[userId]
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop())
+      delete remoteAudioStreams.value[userId]
     }
 
+    delete vadContexts[userId]
+    delete lastSpeakingMap[userId]
+    speakingUsers.value.delete(Number(userId))
+  }
 
-    function attachRemoteAudioStream(userId, stream) {
-      const audioEl = remoteAudioElements.value[userId]
-      if (!audioEl) return
-
-      if (audioEl.srcObject !== stream) {
-        audioEl.srcObject = stream
-        audioEl.__vadInitialized = false
-      }
-
-      audioEl.play().catch(() => {})
-
-      setTimeout(() => {
-        startVoiceDetection(userId, stream, true, audioEl)
-      }, 300)
+  function detachRemoteCameraStream(userId) {
+    const stream = remoteCameraStreams.value[userId]
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop())
+      delete remoteCameraStreams.value[userId]
     }
+  }
 
-    function attachRemoteCameraStream(userId, stream) {
-      const videoEl = remoteCameraElements.value[userId]
-      if (!videoEl) return
-
-      videoEl.srcObject = stream
-      videoEl.play().catch(() => {})
+  function detachRemoteScreenStream(userId) {
+    const stream = remoteScreenStreams.value[userId]
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop())
+      delete remoteScreenStreams.value[userId]
     }
+  }
 
-    function attachRemoteScreenStream(userId, stream) {
-      const screenEl = remoteScreenElements.value[userId]
-      if (!screenEl) return
+  function detachAllRemoteStreams(userId) {
+    detachRemoteAudioStream(userId)
+    detachRemoteCameraStream(userId)
+    detachRemoteScreenStream(userId)
+  }
 
-      screenEl.srcObject = stream
-      screenEl.play().catch(() => {})
+  function cleanupAllRemoteStreams() {
+    const userIds = new Set([
+      ...Object.keys(remoteAudioStreams.value),
+      ...Object.keys(remoteCameraStreams.value),
+      ...Object.keys(remoteScreenStreams.value),
+    ])
+
+    for (const userId of userIds) {
+      detachAllRemoteStreams(userId)
     }
+  }
 
-    function detachRemoteAudioStream(userId) {
-      const el = remoteAudioElements.value[userId]
-      if (el) {
-        el.pause()
-        el.srcObject = null
-        delete remoteAudioElements.value[userId]
-      }
+  async function initMediaTracks() {
+    if (!localMicTrack.value) {
+      await setMicDevice(micSettings.value.deviceId)
 
-      const stream = remoteAudioStreams.value[userId]
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop())
-        delete remoteAudioStreams.value[userId]
-      }
-
-      delete vadContexts[userId]
-      delete lastSpeakingMap[userId]
-      speakingUsers.value.delete(userId)
-    }
-
-    function detachRemoteCameraStream(userId) {
-      const el = remoteCameraElements.value[userId]
-      if (el) {
-        el.pause()
-        el.srcObject = null
-        delete remoteCameraElements.value[userId]
-      }
-
-      const stream = remoteCameraStreams.value[userId]
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop())
-        delete remoteCameraStreams.value[userId]
-      }
-    }
-
-    function detachRemoteScreenStream(userId) {
-      const el = remoteScreenElements.value[userId]
-      if (el) {
-        el.pause()
-        el.srcObject = null
-        delete remoteScreenElements.value[userId]
-      }
-
-      const stream = remoteScreenStreams.value[userId]
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop())
-        delete remoteScreenStreams.value[userId]
-      }
-    }
-
-    function detachAllRemoteStreams(userId) {
-      detachRemoteAudioStream(userId)
-      detachRemoteCameraStream(userId)
-      detachRemoteScreenStream(userId)
-    }
-
-
-    function registerAudioElement(userId, el) {
-      if (!el) return
-      remoteAudioElements.value[userId] = el
-
-      const stream = remoteAudioStreams.value[userId]
-      if (stream) {
-        if (el.srcObject !== stream) {
-          el.srcObject = stream
-          el.__vadInitialized = false
-        }
-        el.play().catch(() => {})
-        if (!el.__vadInitialized) {
-          setTimeout(() => {
-            startVoiceDetection(userId, stream, true, el)
-          }, 300)
-        }
-      } else {
-        const interval = setInterval(() => {
-          const s = remoteAudioStreams.value[userId]
-          if (s) {
-            clearInterval(interval)
-            el.srcObject = s
-            el.__vadInitialized = false
-            el.play().catch(() => {})
-            setTimeout(() => {
-              startVoiceDetection(userId, s, true, el)
-            }, 300)
-          }
-        }, 200)
-      }
-    }
-
-    function registerCameraElement(userId, el) {
-      if (!el) return
-      remoteCameraElements.value[userId] = el
-
-      const stream = remoteCameraStreams.value[userId]
-      if (stream) {
-        el.srcObject = stream
-        el.play().catch(() => {})
-      } else {
-        const interval = setInterval(() => {
-          const s = remoteCameraStreams.value[userId]
-          if (s) {
-            clearInterval(interval)
-            el.srcObject = s
-            el.play().catch(() => {})
-          }
-        }, 200)
-      }
-    }
-
-    function registerScreenElement(userId, el) {
-      if (!el) return
-      remoteScreenElements.value[userId] = el
-
-      const stream = remoteScreenStreams.value[userId]
-      if (stream) {
-        el.srcObject = stream
-        el.play().catch(() => {})
-      } else {
-        const interval = setInterval(() => {
-          const s = remoteScreenStreams.value[userId]
-          if (s) {
-            clearInterval(interval)
-            el.srcObject = s
-            el.play().catch(() => {})
-          }
-        }, 200)
-      }
-    }
-
-
-    function cleanupAllRemoteStreams() {
-      const userIds = new Set([
-        ...Object.keys(remoteAudioElements.value),
-        ...Object.keys(remoteCameraElements.value),
-        ...Object.keys(remoteScreenElements.value),
-      ])
-
-      for (const userId of userIds) {
-        detachAllRemoteStreams(userId)
-      }
-    }
-
-
-    async function initMediaTracks() {
-      if (!localMicTrack.value) {
-        await setMicDevice(micSettings.value.deviceId)
-
-        for (const [userId, sender] of micSenderMap.entries()) {
-          if (localMicTrack.value) {
-            await sender.replaceTrack(localMicTrack.value)
-            console.log(`[initMediaTracks] 🔄 Микрофон заменён у ${userId}`)
-          }
+      for (const [userId, sender] of micSenderMap.entries()) {
+        if (localMicTrack.value) {
+          await sender.replaceTrack(localMicTrack.value)
+          console.log(`[initMediaTracks] 🔄 Микрофон заменён у ${userId}`)
         }
       }
-
-      if (localStream.value) {
-        startVoiceDetection(authStore.getUserId, localStream.value, false)
-      }
     }
 
+    if (localStream.value) {
+      startVoiceDetection(authStore.getUserId, localStream.value, false)
+    }
+  }
 
-    function hasLiveVideo(userId) {
-      const checkTrack = (track) =>
-        track?.enabled && track.readyState === 'live'
+  function hasLiveVideo(userId) {
+    const checkTrack = (track) =>
+      track?.enabled && track.readyState === 'live'
 
-      if (String(userId) === String(authStore.getUserId)) {
-        return checkTrack(localCameraTrack.value) || checkTrack(localScreenTrack.value)
-      }
-
-      const checkTracks = (stream) =>
-        stream?.getVideoTracks?.().some(checkTrack) ?? false
-
-      return (
-        checkTracks(remoteCameraStreams.value[userId]) ||
-        checkTracks(remoteScreenStreams.value[userId])
-      )
+    if (String(userId) === String(authStore.getUserId)) {
+      return checkTrack(localCameraTrack.value) || checkTrack(localScreenTrack.value)
     }
 
+    const checkTracks = (stream) =>
+      stream?.getVideoTracks?.().some(checkTrack) ?? false
 
-    return {
-      // === main ===
-      localStream,
-      localScreenStream,
+    return (
+      checkTracks(remoteCameraStreams.value[userId]) ||
+      checkTracks(remoteScreenStreams.value[userId])
+    )
+  }
 
-      remoteAudioStreams,
-      remoteCameraStreams,
-      remoteScreenStreams,
-
-      remoteAudioElements,
-      remoteCameraElements,
-      remoteScreenElements,
-
-      micSettings,
-      camSettings,
-      screenSettings,
-
-      isMuted,
-      isCamOff,
-      speakingUsers,
-
-      // === toggle ===
-      toggleMute,
-      toggleCamera,
-      toggleScreenShare,
-
-      // === device settings ===
-      setMicDevice,
-      setCamDevice,
-      applyMicStateToLocalStream,
-      applyCamStateToLocalStream,
-
-      // === attach / detach ===
-      attachRemoteAudioStream,
-      attachRemoteCameraStream,
-      attachRemoteScreenStream,
-      detachRemoteAudioStream,
-      detachRemoteCameraStream,
-      detachRemoteScreenStream,
-      detachAllRemoteStreams,
-
-      // === register ===
-      registerAudioElement,
-      registerCameraElement,
-      registerScreenElement,
-
-      // === screen share ===
-      startScreenShare,
-      stopScreenShare,
-
-      // === camera ===
-      startCamera,
-      stopCamera,
-
-      // === vad ===
-      startVoiceDetection,
-
-      // === init/utils ===
-      initMediaTracks,
-      hasLiveVideo,
-      cleanupAllRemoteStreams,
-
-      // === localStorage ===
-      saveMicSettings,
-      saveCamSettings,
-      saveScreenSettings,
-      loadMicSettings,
-      loadCamSettings,
-      loadScreenSettings,
-
-      // === tracks/senderMaps
-      localMicTrack,
-      localCameraTrack,
-      localScreenTrack,
-      micSenderMap,
-      camSenderMap,
-      screenSenderMap
-    }
-  })
+  return {
+    localStream,
+    localScreenStream,
+    remoteAudioStreams,
+    remoteCameraStreams,
+    remoteScreenStreams,
+    micSettings,
+    camSettings,
+    screenSettings,
+    isMuted,
+    isCamOff,
+    speakingUsers,
+    toggleMute,
+    toggleCamera,
+    toggleScreenShare,
+    setMicDevice,
+    setCamDevice,
+    applyMicStateToLocalStream,
+    applyCamStateToLocalStream,
+    detachRemoteAudioStream,
+    detachRemoteCameraStream,
+    detachRemoteScreenStream,
+    detachAllRemoteStreams,
+    startScreenShare,
+    stopScreenShare,
+    startCamera,
+    stopCamera,
+    startVoiceDetection,
+    initMediaTracks,
+    hasLiveVideo,
+    cleanupAllRemoteStreams,
+    saveMicSettings,
+    saveCamSettings,
+    saveScreenSettings,
+    loadMicSettings,
+    loadCamSettings,
+    loadScreenSettings,
+    localMicTrack,
+    localCameraTrack,
+    localScreenTrack,
+    micSenderMap,
+    camSenderMap,
+    screenSenderMap
+  }
+})
