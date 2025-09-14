@@ -208,15 +208,14 @@
     <div class="font-semibold mb-1">screenStatusMap:</div>
     <pre class="whitespace-pre-wrap break-words">{{ callStore.screenStatusMap }}</pre>
   </div>
-</template>
 
-  <!-- DEBUG: Камера статус-мап -->
-  <!-- <div class="fixed bottom-2 right-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
+  <div class="fixed bottom-2 right-2 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
     <div class="font-semibold mb-1">cameraStatusMap:</div>
     <pre class="whitespace-pre-wrap break-words">
       {{ callStore.cameraStatusMap }}
     </pre>
-  </div> -->
+  </div>
+</template>
 
   <!-- DEBUG: hasLiveVideo для всех участников -->
   <!-- <div class="fixed bottom-24 right-2 mb-40 bg-white border border-gray-300 shadow-lg rounded-lg p-2 text-xs text-black max-w-[300px] z-50">
@@ -244,6 +243,7 @@ const currentUserID = computed(() => authStore.getUserId)
 const { cameraStatusMap, callMembers } = storeToRefs(callStore)
 
 const localVideoRef = ref(null)
+const userPreferredView = ref({})
 
 const joinedParticipants = computed(() =>
   Object.entries(callMembers.value)
@@ -420,11 +420,15 @@ watchEffect(() => {
   fullscreenVideoRef.value.srcObject = fullscreenStream.value
 })
 
-
 function handleKeydown(e) {
   if (e.key === 'Escape') {
     closeFullscreen()
   }
+}
+
+function toggleView(userId) {
+  const current = userPreferredView.value[userId] || 'screen'
+  userPreferredView.value[userId] = current === 'screen' ? 'camera' : 'screen'
 }
 
 onMounted(() => {

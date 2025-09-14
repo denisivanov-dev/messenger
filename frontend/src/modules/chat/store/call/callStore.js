@@ -45,10 +45,6 @@ export const useCallStore = defineStore('call', () => {
       ...screenStatusMap.value,
       [String(userId)]: isEnabled
     }
-
-    if (!isEnabled) {
-      mediaStore.removeRemoteScreenStream(userId)
-    }
   }
 
   function sendCameraStatusUpdate(isEnabled) {

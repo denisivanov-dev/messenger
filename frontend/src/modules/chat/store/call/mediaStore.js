@@ -63,7 +63,6 @@
     const camSenderMap = new Map()
     const screenSenderMap = new Map()
 
-
     function saveMicSettings() {
       try {
         localStorage.setItem(micKeyForUser(), JSON.stringify(micSettings.value))
@@ -230,19 +229,25 @@
       const track = localCameraTrack.value
       if (!track) return
 
-      for (const [userId, pc] of Object.entries(webrtcStore.peerConnections)) {
-        let sender = camSenderMap.get(userId)
-        if (!sender) {
-          sender = pc.addTrack(track, localStream.value)
-          camSenderMap.set(userId, sender)
-        } else {
-          sender.replaceTrack(track)
+      remoteCameraStreams.value[authStore.getUserId] = new MediaStream([track])
+      attachRemoteCameraStream(authStore.getUserId, remoteCameraStreams.value[authStore.getUserId])
+
+      let needRenegotiate = false
+
+      for (const [userId, sender] of camSenderMap.entries()) {
+        if (!sender.track) {
+          needRenegotiate = true
         }
+        await sender.replaceTrack(track)
       }
 
-      webrtcStore.renegotiateWithAll()
+      if (needRenegotiate) {
+        webrtcStore.renegotiateWithAll()
+      }
+
       callStore.sendCameraStatusUpdate(true)
     }
+
 
     async function stopCamera() {
       camSettings.value.enabled = false
@@ -250,7 +255,20 @@
 
       const track = localCameraTrack.value
       if (track) {
-        track.enabled = false
+        track.stop()
+      }
+      localCameraTrack.value = null
+
+      delete remoteCameraStreams.value[authStore.getUserId]
+      const camEl = remoteCameraElements.value[authStore.getUserId]
+      if (camEl) {
+        camEl.pause()
+        camEl.srcObject = null
+      }
+      delete remoteCameraElements.value[authStore.getUserId]
+
+      for (const sender of camSenderMap.values()) {
+        await sender.replaceTrack(null)
       }
 
       callStore.sendCameraStatusUpdate(false)
@@ -282,28 +300,35 @@
         remoteScreenStreams.value[authStore.getUserId] = stream
         attachRemoteScreenStream(authStore.getUserId, stream)
 
-        for (const [userId, pc] of Object.entries(webrtcStore.peerConnections)) {
-          const sender = pc.addTrack(track, stream)
-          screenSenderMap.set(userId, sender)
+        let needRenegotiate = false
+
+        for (const [userId, sender] of screenSenderMap.entries()) {
+          if (!sender.track) {
+            needRenegotiate = true
+          }
+          await sender.replaceTrack(track)
         }
 
-        webrtcStore.renegotiateWithAll()
+        if (needRenegotiate) {
+          webrtcStore.renegotiateWithAll()
+        }
+
         callStore.sendScreenStatusUpdate(true)
 
         track.onended = () => {
           stopScreenShare()
         }
-
       } catch (err) {
         console.warn('❌ Ошибка при старте демонстрации экрана:', err)
       }
     }
 
+
     async function stopScreenShare() {
       const track = localScreenTrack.value
-      if (!track || !localScreenStream.value) return
-
-      localScreenStream.value.getTracks().forEach(t => t.stop())
+      if (track) {
+        track.stop()
+      }
       localScreenStream.value = null
       localScreenTrack.value = null
 
@@ -319,15 +344,9 @@
       }
       delete remoteScreenElements.value[authStore.getUserId]
 
-      for (const [userId, pc] of Object.entries(webrtcStore.peerConnections)) {
-        const sender = screenSenderMap.get(userId)
-        if (sender) {
-          pc.removeTrack(sender)
-          screenSenderMap.delete(userId)
-        }
+      for (const sender of screenSenderMap.values()) {
+        await sender.replaceTrack(null)
       }
-
-      webrtcStore.renegotiateWithAll()
     }
 
     
@@ -364,14 +383,8 @@
       })
       localStream.value.addTrack(newTrack)
 
-      for (const [userId, pc] of Object.entries(webrtcStore.peerConnections)) {
-        let sender = micSenderMap.get(userId)
-        if (!sender) {
-          sender = pc.addTrack(newTrack, localStream.value)
-          micSenderMap.set(userId, sender)
-        } else {
-          sender.replaceTrack(newTrack)
-        }
+      for (const sender of micSenderMap.values()) {
+        sender.replaceTrack(newTrack)
       }
     }
 
@@ -404,6 +417,10 @@
         t.stop()
       })
       localStream.value.addTrack(newTrack)
+
+      for (const sender of camSenderMap.values()) {
+        sender.replaceTrack(newTrack)
+      }
     }
 
 
@@ -582,7 +599,16 @@
 
 
     async function initMediaTracks() {
-      await setMicDevice(micSettings.value.deviceId)
+      if (!localMicTrack.value) {
+        await setMicDevice(micSettings.value.deviceId)
+
+        for (const [userId, sender] of micSenderMap.entries()) {
+          if (localMicTrack.value) {
+            await sender.replaceTrack(localMicTrack.value)
+            console.log(`[initMediaTracks] 🔄 Микрофон заменён у ${userId}`)
+          }
+        }
+      }
 
       if (localStream.value) {
         startVoiceDetection(authStore.getUserId, localStream.value, false)

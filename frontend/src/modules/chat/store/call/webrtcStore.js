@@ -33,33 +33,42 @@ export const useWebRTCStore = defineStore('webrtc', () => {
     const pc = new RTCPeerConnection({ iceServers: servers.iceServers })
     peerConnections.value[userId] = pc
 
-    const { localMicTrack, localCameraTrack, localScreenTrack } = mediaStore
-
-    if (localMicTrack) {
-      const sender = pc.addTrack(localMicTrack, new MediaStream([localMicTrack]))
+    
+    if (mediaStore.localMicTrack) {
+      const sender = pc.addTrack(mediaStore.localMicTrack, new MediaStream([mediaStore.localMicTrack]))
       mediaStore.micSenderMap.set(userId, sender)
+    } else {
+      const transceiver = pc.addTransceiver("audio", { direction: "sendrecv" })
+      mediaStore.micSenderMap.set(userId, transceiver.sender)
     }
 
-    if (localCameraTrack) {
-      const sender = pc.addTrack(localCameraTrack, new MediaStream([localCameraTrack]))
-      mediaStore.camSenderMap.set(userId, sender)
+    const camTransceiver = pc.addTransceiver("video", { direction: "sendrecv" })
+    if (mediaStore.localCameraTrack) {
+      camTransceiver.sender.replaceTrack(mediaStore.localCameraTrack)
     }
+    mediaStore.camSenderMap.set(userId, camTransceiver.sender)
 
-    if (localScreenTrack) {
-      const sender = pc.addTrack(localScreenTrack, new MediaStream([localScreenTrack]))
-      mediaStore.screenSenderMap.set(userId, sender)
+    const screenTransceiver = pc.addTransceiver("video", { direction: "sendrecv" })
+    if (mediaStore.localScreenTrack) {
+      screenTransceiver.sender.replaceTrack(mediaStore.localScreenTrack)
     }
+    mediaStore.screenSenderMap.set(userId, screenTransceiver.sender)
+
 
     pc.ontrack = event => {
+      console.info('ontrack111')
       const { track } = event
-      const stream = new MediaStream([track])
+      if (track.readyState === 'ended') {
+        return // не кладём мусор
+      }
 
+      const stream = new MediaStream([track])
       const kind = track.kind
       const settings = track.getSettings?.() || {}
       const displaySurface = (settings.displaySurface || '').toLowerCase()
       const isScreen = kind === 'video' &&
         (track.contentHint === 'detail' ||
-         ['monitor', 'window', 'browser', 'application'].includes(displaySurface))
+        ['monitor', 'window', 'browser', 'application'].includes(displaySurface))
 
       const alreadyHasCamera = !!mediaStore.remoteCameraStreams[userId]
       const finalIsScreen = isScreen || (kind === 'video' && alreadyHasCamera)
@@ -79,6 +88,18 @@ export const useWebRTCStore = defineStore('webrtc', () => {
         } else {
           mediaStore.remoteCameraStreams[userId] = stream
           mediaStore.attachRemoteCameraStream(userId, stream)
+        }
+      }
+
+      track.onended = () => {
+        if (kind === 'audio') {
+          delete mediaStore.remoteAudioStreams[userId]
+        } else if (kind === 'video') {
+          if (finalIsScreen) {
+            delete mediaStore.remoteScreenStreams[userId]
+          } else {
+            delete mediaStore.remoteCameraStreams[userId]
+          }
         }
       }
     }
@@ -153,6 +174,16 @@ export const useWebRTCStore = defineStore('webrtc', () => {
     try {
       await pc.addIceCandidate(candidate)
     } catch {}
+  }
+
+  function createSilentAudioTrack() {
+    const ctx = new AudioContext()
+    const oscillator = ctx.createOscillator()
+    const dst = oscillator.connect(ctx.createMediaStreamDestination())
+    oscillator.start()
+    const track = dst.stream.getAudioTracks()[0]
+    track.enabled = false
+    return track
   }
 
   async function flushPendingCandidates(userId) {
