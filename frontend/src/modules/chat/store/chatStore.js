@@ -119,7 +119,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       if (msg.type === 'incoming_leave_call') {
-        delete callStore.callMembers[msg.from_user]
+        callStore.handleLeaveCall(msg.from_user)
       }
 
       if (msg.type === 'incoming_webrtc_offer') {
@@ -143,6 +143,21 @@ export const useChatStore = defineStore('chat', () => {
 
       if (msg.type === 'incoming_screen_status') {
         callStore.updateScreenStatus(msg.from_user, msg.enabled)
+      }
+
+      if (msg.type === 'incoming_mic_status') {
+        callStore.updateMicStatus(msg.from_user, msg.enabled)
+      }
+
+      if (msg.type === 'update_message' && msg.call_info) {
+        const messageID = msg.message_id
+        const callInfo = msg.call_info
+
+        messagesStore.updateMessage(messageID, {
+          call_info: callInfo
+        })
+
+        return
       }
             
       const shouldAutoScroll = isNearBottom()

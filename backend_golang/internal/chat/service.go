@@ -49,3 +49,27 @@ func BuildMessage(in common.IncomingSendMessage, userID, username string) common
 		ReplyToUser:  in.ReplyToUser,
 	}
 }
+
+func BuildSystemMessage(msgType string, chatType string, fromUserID string, toUserID string, callInfo *common.CallInfo) common.OutgoingMessage {
+	t := strings.TrimSpace(strings.ToLower(chatType))
+
+	chatID := ""
+	switch t {
+	case "global":
+		chatID = "1"
+	case "private":
+		chatID = utils.GeneratePrivateChatKey(fromUserID, toUserID)
+	}
+
+	return common.OutgoingMessage{
+		MessageID:  uuid.NewString(),
+		ChatID:     chatID,
+		Type:       msgType,
+		UserID:     "",
+		Username:   "system",
+		Text:       "",
+		Timestamp:  time.Now().UnixMilli(),
+		ReceiverID: toUserID,
+		CallInfo:   callInfo,
+	}
+}

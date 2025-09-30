@@ -133,3 +133,18 @@ type OutgoingScreenStatus struct {
 	ChatType string `json:"chat_type"`
 	Enabled  bool   `json:"enabled"`
 }
+
+type IncomingMicStatus struct {
+	Type       string `json:"type"`        // "mic_status"
+	ChatType   string `json:"chat_type"`   // "private"
+	ReceiverID string `json:"receiver_id"` // кому
+	UserID     string `json:"user_id"`     // кто отправил
+	Enabled    bool   `json:"enabled"`     // включен ли микрофон
+}
+
+type OutgoingMicStatus struct {
+	Type     string `json:"type"`      // "incoming_mic_status"
+	FromUser string `json:"from_user"` // кто обновил
+	ChatType string `json:"chat_type"` // "private"
+	Enabled  bool   `json:"enabled"`
+}

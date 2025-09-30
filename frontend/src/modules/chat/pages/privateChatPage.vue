@@ -20,7 +20,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch} from 'vue'
+import { nextTick, onMounted, ref, watch} from 'vue'
 import ChatWindow from '../components/ui/chatWindow/chatWindow.vue'
 import MessageUserInput from '../components/ui/chatWindow/messageUserInput.vue'
 import ChatToolbar from '../components/ui/chatWindow/chatToolbar.vue'
@@ -66,6 +66,7 @@ onMounted(() => {
           const members = {}
           const cameraMap = {}
           const screenMap = {}
+          const micMap = {}
 
           for (const [key, value] of Object.entries(response)) {
             if (key.startsWith('cam:')) {
@@ -74,18 +75,27 @@ onMounted(() => {
             } else if (key.startsWith('screen:')) {
               const userId = key.slice(7)
               screenMap[userId] = value === 'on'
+            } else if (key.startsWith('mic:')) {
+              const userId = key.slice(4)
+              micMap[userId] = value === 'on'
             } else {
               members[key] = value
             }
           }
 
+          callStore.resetCallState()
+          await nextTick()
+
           callStore.callMembers = members
           callStore.cameraStatusMap = cameraMap
           callStore.screenStatusMap = screenMap
+          callStore.micStatusMap = micMap
 
           if (members[String(myId)] === 'joined') {
+            await callStore.leaveCall()
+            await nextTick()  
             await callStore.joinCall()
-          }
+          }  
         }
       } catch (err) {
         console.error('Ошибка при получении статуса звонка:', err)

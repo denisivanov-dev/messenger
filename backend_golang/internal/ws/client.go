@@ -217,11 +217,33 @@ func (c *Client) ReadPump() {
 			voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
 			voice.SetCallParticipant(c.RDB, roomID, payload.ReceiverID, "calling")
 
+			voice.AddCallHistoryParticipant(c.RDB, roomID, c.UserID)
+
 			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCallNotification{
 				Type:     "incoming_call",
 				FromUser: c.UserID,
 				ChatType: payload.ChatType,
 			})
+
+			callInfo := &common.CallInfo{
+				Status:       "ongoing",
+				Participants: []string{c.UserID},
+				StartedAt:    time.Now().Unix(),
+			}
+
+			msg, ok := chat.HandleSystemMessage(
+				"call_started",
+				payload.ChatType,
+				c.UserID,
+				payload.ReceiverID,
+				callInfo,
+				c.RDB,
+			)
+
+			if ok {
+				c.joinRoomIfNotJoined(msg.ChatID)
+				c.broadcastJSON(msg.ChatID, msg)
+			}
 
 		case "cancel_call":
 			var payload common.IncomingCancelCall
@@ -267,11 +289,11 @@ func (c *Client) ReadPump() {
 				continue
 			}
 
-			if !payload.Accepted {
+			if payload.Accepted {
+				voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
+			} else {
 				voice.RemoveCallParticipant(c.RDB, roomID, c.UserID)
 			}
-
-			voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
 
 			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingCallAnswer{
 				Type:     "incoming_call_answer",
@@ -299,6 +321,8 @@ func (c *Client) ReadPump() {
 			}
 
 			voice.SetCallParticipant(c.RDB, roomID, c.UserID, "joined")
+
+			voice.AddCallHistoryParticipant(c.RDB, roomID, c.UserID)
 
 			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingJoinCallNotification{
 				Type:     "incoming_join_call",
@@ -331,6 +355,43 @@ func (c *Client) ReadPump() {
 				FromUser: c.UserID,
 				ChatType: payload.ChatType,
 			})
+
+			remaining, _ := voice.GetCallParticipants(c.RDB, roomID)
+			if len(remaining) == 0 {
+				voice.ClearCallRoom(c.RDB, roomID)
+
+				msgID, err := voice.GetOngoingCallMessageID(c.RDB, roomID)
+				if err == nil && msgID != "" {
+					startedAt, _ := voice.GetCallStartTime(c.RDB, roomID)
+					now := time.Now().Unix()
+
+					var duration int64 = 0
+					if startedAt > 0 {
+						duration = now - startedAt
+					}
+
+					participants := voice.GetCallHistoryParticipants(c.RDB, roomID)
+
+					updatedMsg := common.OutgoingMessage{
+						Type:      "call_started",
+						MessageID: msgID,
+						ChatID:    roomID,
+						CallInfo: &common.CallInfo{
+							Status:       "ended",
+							StartedAt:    startedAt,
+							Duration:     duration,
+							Participants: participants,
+						},
+					}
+
+					chat.UpdateSystemMessageInRedisHistory(c.RDB, roomID, msgID, updatedMsg)
+					c.broadcastJSON(roomID, updatedMsg)
+
+					voice.ClearOngoingCallMessageID(c.RDB, roomID)
+					voice.ClearCallStartTime(c.RDB, roomID)
+					voice.ClearCallHistoryParticipants(c.RDB, roomID)
+				}
+			}
 
 		case "webrtc_offer":
 			var payload common.IncomingWebRTCOffer
@@ -438,6 +499,35 @@ func (c *Client) ReadPump() {
 
 			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingScreenStatus{
 				Type:     "incoming_screen_status",
+				FromUser: payload.UserID,
+				ChatType: payload.ChatType,
+				Enabled:  payload.Enabled,
+			})
+
+		case "mic_status":
+			var payload common.IncomingMicStatus
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				c.sendError("invalid mic_status payload")
+				continue
+			}
+
+			if payload.ChatType != "private" || payload.ReceiverID == "" {
+				c.sendError("invalid call context")
+				continue
+			}
+
+			roomID, ok := c.resolveRoomID(payload.ChatType, payload.ReceiverID)
+			if !ok {
+				c.sendError("access denied")
+				continue
+			}
+
+			// сохраняем состояние в Redis (аналогично камере/экрану)
+			voice.SetCallMediaStatus(c.RDB, roomID, c.UserID, "mic", payload.Enabled)
+
+			// пересылаем собеседнику
+			c.Hub.SendToUser(payload.ReceiverID, common.OutgoingMicStatus{
+				Type:     "incoming_mic_status",
 				FromUser: payload.UserID,
 				ChatType: payload.ChatType,
 				Enabled:  payload.Enabled,

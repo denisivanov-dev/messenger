@@ -12,14 +12,20 @@ export const useCallStore = defineStore('call', () => {
   const webrtcStore = useWebRTCStore()
   const mediaStore = useMediaStore()
 
+  // for UI
   const inCall = ref(false)
   const isCalling = ref(false)
-  const hasJoined = ref(false)
   const incomingCallFrom = ref(null)
+  // for WebRTC
+  const hasJoined = ref(false)
+
   const callMembers = ref({})
 
+  const micStatusMap = ref({})
   const cameraStatusMap = ref({})
   const screenStatusMap = ref({})
+
+  const showCamPopup = ref(false)
 
   const getMyId = () => String(authStore.getUserId)
 
@@ -31,6 +37,25 @@ export const useCallStore = defineStore('call', () => {
     delete callMembers.value[String(userId)]
     delete cameraStatusMap.value[String(userId)]
     delete screenStatusMap.value[String(userId)]
+  }
+
+  function updateMicStatus(userId, isEnabled) {
+    micStatusMap.value = {
+      ...micStatusMap.value,
+      [String(userId)]: isEnabled
+    }
+  }
+
+  function sendMicStatusUpdate(isEnabled) {
+    sendMessage({
+      type: 'mic_status',
+      chat_type: 'private',
+      receiver_id: chatStore.receiverID,
+      enabled: isEnabled,
+      user_id: String(authStore.getUserId)
+    })
+
+    updateMicStatus(String(authStore.getUserId), isEnabled)
   }
 
   function updateCameraStatus(userId, isEnabled) {
@@ -157,7 +182,8 @@ export const useCallStore = defineStore('call', () => {
     const myId = getMyId()
 
     mediaStore.loadMicSettings()
-    mediaStore.loadCamSettings()
+    const prevCamSettings = { ...mediaStore.loadCamSettings() }
+    console.info('prevCamSettings:', prevCamSettings)
 
     if (!callMembers.value[myId]) {
       setMemberStatus(myId, 'joined')
@@ -166,7 +192,9 @@ export const useCallStore = defineStore('call', () => {
     hasJoined.value = true
     inCall.value = true
 
-    sendCameraStatusUpdate(mediaStore.camSettings.enabled)
+    mediaStore.camSettings.enabled = false
+    sendCameraStatusUpdate(false)
+    mediaStore.saveCamSettings()
 
     sendMessage({
       type: 'join_call',
@@ -176,17 +204,38 @@ export const useCallStore = defineStore('call', () => {
 
     const others = Object.keys(callMembers.value).filter(id => id !== myId)
     await Promise.all(others.map(id => webrtcStore.startCall(id, false)))
+
+    setTimeout(() => {
+      webrtcStore.renegotiateWithAll()
+    }, 200)
+
+    if (prevCamSettings?.enabled) {
+      showCamPopup.value = true
+    }
+
+    console.info('----------------------')
+    console.info(mediaStore.remoteCameraStreams)
+    console.info(cameraStatusMap.value)
+    console.info('showCamPopup:', showCamPopup.value)
+    console.info('----------------------')
   }
+
 
   function handleJoinCall(userId) {
     setMemberStatus(userId, 'joined')
 
     if (hasJoined.value) {
       webrtcStore.startCall(userId, true)
+      webrtcStore.renegotiateWithAll()
     }
   }
 
-  function leaveCall() {
+  function handleLeaveCall(userId) {
+    removeMember(userId)            
+    webrtcStore.endCallWith(userId)
+  }
+
+  async function leaveCall() {
     const myId = getMyId()
 
     if (isCalling.value) {
@@ -200,21 +249,23 @@ export const useCallStore = defineStore('call', () => {
       receiver_id: chatStore.receiverID
     })
 
-    Object.keys(callMembers.value).forEach(id => {
-      if (id !== myId) {
-        webrtcStore.endCallWith(id)
-      }
-    })
+    // дожидаемся завершения всех endCallWith
+    await Promise.all(
+      Object.keys(callMembers.value)
+        .filter(id => id !== myId)
+        .map(id => webrtcStore.endCallWith(id))
+    )
 
     removeMember(myId)
     hasJoined.value = false
-
+    inCall.value = false
+    
     if (Object.keys(callMembers.value).length === 0) {
       resetCallState()
     }
   }
 
-  function resetCallState() {
+  function resetCallState() { 
     inCall.value = false
     isCalling.value = false
     hasJoined.value = false
@@ -229,8 +280,10 @@ export const useCallStore = defineStore('call', () => {
     hasJoined,
     incomingCallFrom,
     callMembers,
+    micStatusMap,
     cameraStatusMap,
     screenStatusMap,
+    showCamPopup,
 
     startRequestCall,
     cancelRequestCall,
@@ -241,13 +294,16 @@ export const useCallStore = defineStore('call', () => {
     handleCallAnswer,
     joinCall,
     handleJoinCall,
+    handleLeaveCall,
     leaveCall,
     resetCallState,
 
     setMemberStatus,
     removeMember,
+    updateMicStatus,
     updateCameraStatus,
     updateScreenStatus,
+    sendMicStatusUpdate,
     sendCameraStatusUpdate,
     sendScreenStatusUpdate
   }

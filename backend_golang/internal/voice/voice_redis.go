@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
 
 var ctx = context.Background()
 
+// ========== Active call participants ==========
 
+// SetCallParticipant sets a user's participation status ("joined", "calling", etc.)
 func SetCallParticipant(rdb *redis.Client, roomID string, userID string, status string) {
 	key := "callroom:" + roomID
 	err := rdb.HSet(ctx, key, userID, status).Err()
@@ -19,6 +22,7 @@ func SetCallParticipant(rdb *redis.Client, roomID string, userID string, status 
 	}
 }
 
+// RemoveCallParticipant removes a user and their media statuses from the call
 func RemoveCallParticipant(rdb *redis.Client, roomID string, userID string) {
 	key := "callroom:" + roomID
 
@@ -45,6 +49,7 @@ func RemoveCallParticipant(rdb *redis.Client, roomID string, userID string) {
 	}
 }
 
+// GetCallParticipants returns only users with status "joined"
 func GetCallParticipants(rdb *redis.Client, roomID string) (map[string]string, error) {
 	key := "callroom:" + roomID
 	result, err := rdb.HGetAll(ctx, key).Result()
@@ -52,9 +57,21 @@ func GetCallParticipants(rdb *redis.Client, roomID string) (map[string]string, e
 		log.Printf("[voice] redis HGETALL error: %v", err)
 		return nil, err
 	}
-	return result, nil
+
+	participants := make(map[string]string)
+	for field, val := range result {
+		if strings.Contains(field, ":") {
+			continue
+		}
+		if val == "joined" {
+			participants[field] = val
+		}
+	}
+
+	return participants, nil
 }
 
+// ClearCallRoom deletes the entire callroom key
 func ClearCallRoom(rdb *redis.Client, roomID string) {
 	key := "callroom:" + roomID
 	err := rdb.Del(ctx, key).Err()
@@ -63,6 +80,9 @@ func ClearCallRoom(rdb *redis.Client, roomID string) {
 	}
 }
 
+// ========== Media statuses (camera, mic, screen) ==========
+
+// SetCallMediaStatus sets ON/OFF status for a user's media
 func SetCallMediaStatus(rdb *redis.Client, roomID string, userID string, mediaType string, status bool) {
 	key := "callroom:" + roomID
 	field := fmt.Sprintf("%s:%s", mediaType, userID)
@@ -75,6 +95,7 @@ func SetCallMediaStatus(rdb *redis.Client, roomID string, userID string, mediaTy
 	}
 }
 
+// RemoveCallMediaStatus deletes a specific media status field
 func RemoveCallMediaStatus(rdb *redis.Client, roomID string, userID string, mediaType string) {
 	key := "callroom:" + roomID
 	field := fmt.Sprintf("%s:%s", mediaType, userID)
@@ -83,6 +104,7 @@ func RemoveCallMediaStatus(rdb *redis.Client, roomID string, userID string, medi
 	}
 }
 
+// GetAllCallMediaStatuses returns status maps for cam, mic, and screen
 func GetAllCallMediaStatuses(rdb *redis.Client, roomID string) map[string]map[string]bool {
 	key := "callroom:" + roomID
 	result, err := rdb.HGetAll(ctx, key).Result()
@@ -113,8 +135,85 @@ func GetAllCallMediaStatuses(rdb *redis.Client, roomID string) map[string]map[st
 	}
 
 	return map[string]map[string]bool{
-		"camera": cam,
+		"camera":     cam,
 		"microphone": mic,
-		"screen": screen,
+		"screen":     screen,
+	}
+}
+
+// ========== Ongoing call message ID ==========
+
+func SetOngoingCallMessageID(rdb *redis.Client, roomID, messageID string) {
+	key := fmt.Sprintf("ongoing_call_msg:%s", roomID)
+	err := rdb.Set(ctx, key, messageID, 0).Err()
+	if err != nil {
+		log.Printf("[voice] redis SET ongoing_call_msg error: %v", err)
+	}
+}
+
+func GetOngoingCallMessageID(rdb *redis.Client, roomID string) (string, error) {
+	key := fmt.Sprintf("ongoing_call_msg:%s", roomID)
+	return rdb.Get(ctx, key).Result()
+}
+
+func ClearOngoingCallMessageID(rdb *redis.Client, roomID string) {
+	key := fmt.Sprintf("ongoing_call_msg:%s", roomID)
+	err := rdb.Del(ctx, key).Err()
+	if err != nil {
+		log.Printf("[voice] redis DEL ongoing_call_msg error: %v", err)
+	}
+}
+
+// ========== Call start time ==========
+
+func SetCallStartTime(rdb *redis.Client, roomID string, timestamp int64) {
+	key := fmt.Sprintf("call_start_time:%s", roomID)
+	err := rdb.Set(ctx, key, timestamp, 0).Err()
+	if err != nil {
+		log.Printf("[voice] redis SET call_start_time error: %v", err)
+	}
+}
+
+func GetCallStartTime(rdb *redis.Client, roomID string) (int64, error) {
+	key := fmt.Sprintf("call_start_time:%s", roomID)
+	return rdb.Get(ctx, key).Int64()
+}
+
+func ClearCallStartTime(rdb *redis.Client, roomID string) {
+	key := fmt.Sprintf("call_start_time:%s", roomID)
+	err := rdb.Del(ctx, key).Err()
+	if err != nil {
+		log.Printf("[voice] redis DEL call_start_time error: %v", err)
+	}
+}
+
+// ========== Call participation history (who ever joined the call) ==========
+
+// AddCallHistoryParticipant adds a user to the historical set of participants
+func AddCallHistoryParticipant(rdb *redis.Client, roomID string, userID string) {
+	key := fmt.Sprintf("call:was_in_call:%s", roomID)
+	err := rdb.SAdd(ctx, key, userID).Err()
+	if err != nil {
+		log.Printf("[voice] redis SADD call history error: %v", err)
+	}
+}
+
+// GetCallHistoryParticipants returns all users who have ever joined the call
+func GetCallHistoryParticipants(rdb *redis.Client, roomID string) []string {
+	key := fmt.Sprintf("call:was_in_call:%s", roomID)
+	ids, err := rdb.SMembers(ctx, key).Result()
+	if err != nil {
+		log.Printf("[voice] redis SMEMBERS error: %v", err)
+		return []string{}
+	}
+	return ids
+}
+
+// ClearCallHistoryParticipants clears the set of historical participants
+func ClearCallHistoryParticipants(rdb *redis.Client, roomID string) {
+	key := fmt.Sprintf("call:was_in_call:%s", roomID)
+	err := rdb.Del(ctx, key).Err()
+	if err != nil {
+		log.Printf("[voice] redis DEL call history error: %v", err)
 	}
 }

@@ -11,6 +11,13 @@ export const useMessagesStore = defineStore('messages', () => {
     messages.value = []
   }
 
+  function updateMessage(id, partial) {
+    const msg = messages.value.find(m => m.message_id === id)
+    if (msg) {
+      Object.assign(msg, partial)
+    }
+  }
+
   function pushFromWs(msg) {
     try {
       if (
@@ -127,6 +134,7 @@ export const useMessagesStore = defineStore('messages', () => {
 
     clear,
     pushFromWs,
+    updateMessage,
     handleDeleted,
     handleEdited,
     handlePinned,

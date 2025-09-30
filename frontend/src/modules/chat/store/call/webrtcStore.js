@@ -2,14 +2,19 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useMediaStore } from './mediaStore'
 import { useCallStore } from './callStore'
+import { useAuthStore } from '../../../auth/store/authStore'
 import { sendMessage } from '../../api/chatApi'
 
 export const useWebRTCStore = defineStore('webrtc', () => {
+  const authStore = useAuthStore()
   const mediaStore = useMediaStore()
   const callStore = useCallStore()
 
   const peerConnections = ref({})
   const pendingCandidates = ref({})
+
+  const makingOfferMap = ref({})
+  const politeMap = ref({})
 
   const servers = {
     iceServers: [
@@ -24,85 +29,89 @@ export const useWebRTCStore = defineStore('webrtc', () => {
 
   async function createPeerConnection(userId, isCaller) {
     if (peerConnections.value[userId]) {
-      try {
-        peerConnections.value[userId].close()
-      } catch {}
+      try { peerConnections.value[userId].close() } catch {}
       delete peerConnections.value[userId]
     }
 
     const pc = new RTCPeerConnection({ iceServers: servers.iceServers })
     peerConnections.value[userId] = pc
 
-    
+    politeMap.value[userId] = String(authStore.getUserId) > String(userId)
+    makingOfferMap.value[userId] = false
+
+    // === audio ===
+    const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" })
+    mediaStore.micSenderMap.set(userId, audioTransceiver.sender)
     if (mediaStore.localMicTrack) {
-      const sender = pc.addTrack(mediaStore.localMicTrack, new MediaStream([mediaStore.localMicTrack]))
-      mediaStore.micSenderMap.set(userId, sender)
-    } else {
-      const transceiver = pc.addTransceiver("audio", { direction: "sendrecv" })
-      mediaStore.micSenderMap.set(userId, transceiver.sender)
+      await audioTransceiver.sender.replaceTrack(mediaStore.localMicTrack)
     }
 
+    // === camera ===
     const camTransceiver = pc.addTransceiver("video", { direction: "sendrecv" })
-    if (mediaStore.localCameraTrack) {
-      camTransceiver.sender.replaceTrack(mediaStore.localCameraTrack)
-    }
     mediaStore.camSenderMap.set(userId, camTransceiver.sender)
-
-    const screenTransceiver = pc.addTransceiver("video", { direction: "sendrecv" })
-    if (mediaStore.localScreenTrack) {
-      screenTransceiver.sender.replaceTrack(mediaStore.localScreenTrack)
+    if (mediaStore.localCameraTrack) {
+      await camTransceiver.sender.replaceTrack(mediaStore.localCameraTrack)
     }
+
+    // === screen ===
+    const screenTransceiver = pc.addTransceiver("video", { direction: "sendrecv" })
     mediaStore.screenSenderMap.set(userId, screenTransceiver.sender)
+    if (mediaStore.localScreenTrack) {
+      mediaStore.localScreenTrack.contentHint = "detail"
+      await screenTransceiver.sender.replaceTrack(mediaStore.localScreenTrack)
+    }
 
-
+    // === ontrack ===
     pc.ontrack = event => {
-      console.info('ontrack111')
+      if (!callStore.hasJoined) return
+      if (!peerConnections.value[userId]) return 
+      
       const { track } = event
-      if (track.readyState === 'ended') {
-        return // не кладём мусор
-      }
+      if (track.readyState === "ended") return
 
-      const stream = new MediaStream([track])
-      const kind = track.kind
       const settings = track.getSettings?.() || {}
-      const displaySurface = (settings.displaySurface || '').toLowerCase()
-      const isScreen = kind === 'video' &&
-        (track.contentHint === 'detail' ||
-        ['monitor', 'window', 'browser', 'application'].includes(displaySurface))
+      const displaySurface = (settings.displaySurface || "").toLowerCase()
+      const isScreen =
+        track.kind === "video" &&
+        (track.contentHint === "detail" ||
+          ["monitor", "window", "browser", "application"].includes(displaySurface))
 
-      const alreadyHasCamera = !!mediaStore.remoteCameraStreams[userId]
-      const finalIsScreen = isScreen || (kind === 'video' && alreadyHasCamera)
+      if (track.kind === "audio") {
+        mediaStore.remoteAudioStreams[userId] ??= new MediaStream()
 
-      if (kind === 'video' && finalIsScreen && callStore.screenStatusMap[userId] === false) {
-        track.stop?.()
-        return
-      }
-
-      if (kind === 'audio') {
-        mediaStore.remoteAudioStreams[userId] = stream
-        // ИЗМЕНЕНИЕ: Убран вызов attachRemoteAudioStream, так как callPanel.vue теперь обрабатывает это
-        // mediaStore.attachRemoteAudioStream(userId, stream)
-      } else if (kind === 'video') {
-        if (finalIsScreen) {
-          mediaStore.remoteScreenStreams[userId] = stream
-          // ИЗМЕНЕНИЕ: Убран вызов attachRemoteScreenStream
-          // mediaStore.attachRemoteScreenStream(userId, stream)
-        } else {
-          mediaStore.remoteCameraStreams[userId] = stream
-          // ИЗМЕНЕНИЕ: Убран вызов attachRemoteCameraStream
-          // mediaStore.attachRemoteCameraStream(userId, stream)
-        }
-      }
-
-      track.onended = () => {
-        if (kind === 'audio') {
-          delete mediaStore.remoteAudioStreams[userId]
-        } else if (kind === 'video') {
-          if (finalIsScreen) {
-            delete mediaStore.remoteScreenStreams[userId]
-          } else {
-            delete mediaStore.remoteCameraStreams[userId]
+        mediaStore.remoteAudioStreams[userId].getTracks().forEach(t => {
+          if (t.readyState === 'ended') {
+            mediaStore.remoteAudioStreams[userId].removeTrack(t)
           }
+        })
+
+        mediaStore.remoteAudioStreams[userId].addTrack(track)
+        console.log(`[ontrack] 🔊 audio track от ${userId}, stream now has ${mediaStore.remoteAudioStreams[userId].getAudioTracks().length} audio tracks`)
+
+        mediaStore.startVoiceDetection(userId, mediaStore.remoteAudioStreams[userId], true)
+      } else if (track.kind === "video") {
+        const alreadyHasCam = mediaStore.remoteCameraStreams[userId]?.getVideoTracks().length > 0
+
+        if (isScreen || alreadyHasCam) {
+          mediaStore.remoteScreenStreams[userId] ??= new MediaStream()
+
+          mediaStore.remoteScreenStreams[userId].getTracks().forEach(t => {
+            if (t.readyState === 'ended') {
+              mediaStore.remoteScreenStreams[userId].removeTrack(t)
+            }
+          })
+
+          mediaStore.remoteScreenStreams[userId].addTrack(track)
+        } else {
+          mediaStore.remoteCameraStreams[userId] ??= new MediaStream()
+
+          mediaStore.remoteCameraStreams[userId].getTracks().forEach(t => {
+            if (t.readyState === 'ended') {
+              mediaStore.remoteCameraStreams[userId].removeTrack(t)
+            }
+          })
+
+          mediaStore.remoteCameraStreams[userId].addTrack(track)
         }
       }
     }
@@ -118,14 +127,36 @@ export const useWebRTCStore = defineStore('webrtc', () => {
       }
     }
 
+    pc.onnegotiationneeded = async () => {
+      try {
+        makingOfferMap.value[userId] = true
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        sendMessage({
+          type: "webrtc_offer",
+          chat_type: "private",
+          receiver_id: userId,
+          offer: pc.localDescription
+        })
+      } finally {
+        makingOfferMap.value[userId] = false
+      }
+    }
+
+    console.log('[createPeerConnection]', userId, {
+      localMicTrack: !!mediaStore.localMicTrack,
+      localCameraTrack: !!mediaStore.localCameraTrack,
+      localScreenTrack: !!mediaStore.localScreenTrack
+    })
+
     if (isCaller) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       sendMessage({
-        type: 'webrtc_offer',
-        chat_type: 'private',
+        type: "webrtc_offer",
+        chat_type: "private",
         receiver_id: userId,
-        offer
+        offer: pc.localDescription
       })
     }
   }
@@ -136,121 +167,151 @@ export const useWebRTCStore = defineStore('webrtc', () => {
   }
 
   async function handleOffer(from, offer) {
+    if (!callStore.hasJoined) return
+    
     await mediaStore.initMediaTracks()
-    await createPeerConnection(from, false)
+    if (!peerConnections.value[from]) {
+      await createPeerConnection(from, false)
+    }
 
     const pc = peerConnections.value[from]
-    await pc.setRemoteDescription(new RTCSessionDescription(offer))
+    const desc = new RTCSessionDescription(offer)
 
+    const makingOffer = makingOfferMap.value[from]
+    const isPolite = politeMap.value[from]
+    const offerCollision = (makingOffer || pc.signalingState !== "stable")
+
+    if (!isPolite && offerCollision) {
+      console.warn(`[webrtc] Игнорируем оффер от ${from} (collision)`)
+      return
+    }
+
+    await pc.setRemoteDescription(desc)
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
     sendMessage({
-      type: 'webrtc_answer',
-      chat_type: 'private',
+      type: "webrtc_answer",
+      chat_type: "private",
       receiver_id: from,
-      answer
+      answer: pc.localDescription
     })
 
     flushPendingCandidates(from)
   }
 
   async function handleAnswer(from, answer) {
+    if (!callStore.hasJoined) return
+      
     const pc = peerConnections.value[from]
     if (!pc) return
 
-    await pc.setRemoteDescription(new RTCSessionDescription(answer))
-    flushPendingCandidates(from)
+    try {
+      if (pc.signalingState === "have-local-offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer))
+        flushPendingCandidates(from)
+      } else if (pc.signalingState === "stable") {
+        console.warn(`[webrtc] Игнорируем дубликат answer от ${from} (state = stable)`)
+      } else {
+        console.warn(`[webrtc] Неподдерживаемое состояние при answer: ${pc.signalingState}`)
+      }
+    } catch (err) {
+      console.warn(`[webrtc] Ошибка handleAnswer от ${from}:`, err)
+    }
   }
 
   async function handleIceCandidate(from, candidate) {
+    if (!callStore.hasJoined) return
+    
     const pc = peerConnections.value[from]
 
     if (!pc || !pc.remoteDescription) {
-      if (!pendingCandidates.value[from]) {
-        pendingCandidates.value[from] = []
-      }
+      pendingCandidates.value[from] ??= []
       pendingCandidates.value[from].push(candidate)
       return
     }
-
     try {
       await pc.addIceCandidate(candidate)
-    } catch {}
-  }
-
-  function createSilentAudioTrack() {
-    const ctx = new AudioContext()
-    const oscillator = ctx.createOscillator()
-    const dst = oscillator.connect(ctx.createMediaStreamDestination())
-    oscillator.start()
-    const track = dst.stream.getAudioTracks()[0]
-    track.enabled = false
-    return track
+    } catch (err) {
+      console.warn(`[webrtc] Ошибка addIceCandidate от ${from}:`, err)
+    }
   }
 
   async function flushPendingCandidates(userId) {
     const pc = peerConnections.value[userId]
     const candidates = pendingCandidates.value[userId] || []
-
     for (const cand of candidates) {
-      try {
-        await pc.addIceCandidate(cand)
-      } catch {}
+      try { await pc.addIceCandidate(cand) } catch {}
     }
-
     delete pendingCandidates.value[userId]
   }
 
-  function endCallWith(userId) {
-    const pc = peerConnections.value[userId]
-    if (pc) {
-      pc.close()
-      delete peerConnections.value[userId]
-    }
-
-    delete pendingCandidates.value[userId]
-    mediaStore.micSenderMap.delete(userId)
-    mediaStore.camSenderMap.delete(userId)
-    mediaStore.screenSenderMap.delete(userId)
-    mediaStore.detachAllRemoteStreams(userId)
-
-    if (Object.keys(peerConnections.value).length === 0) {
-      mediaStore.localMicTrack?.stop?.()
-      mediaStore.localCameraTrack?.stop?.()
-      mediaStore.localScreenTrack?.stop?.()
-
-      mediaStore.localMicTrack = null
-      mediaStore.localCameraTrack = null
-      mediaStore.localScreenTrack = null
-    }
-  }
-
-  function endAllCalls() {
-    Object.keys(peerConnections.value).forEach(endCallWith)
-    Object.keys(pendingCandidates.value).forEach(k => delete pendingCandidates.value[k])
-    mediaStore.cleanupAllRemoteStreams()
-  }
-
-  function renegotiateWithAll() {
-    Object.entries(peerConnections.value).forEach(async ([userId, pc]) => {
+  async function renegotiateWithAll() {
+    for (const [userId, pc] of Object.entries(peerConnections.value)) {
       try {
-        const offer = await pc.createOffer()
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        })
         await pc.setLocalDescription(offer)
 
         sendMessage({
           type: 'webrtc_offer',
           chat_type: 'private',
           receiver_id: userId,
-          offer: {
-            type: pc.localDescription.type,
-            sdp: pc.localDescription.sdp
-          }
+          offer: pc.localDescription
         })
       } catch (err) {
         console.warn(`[webrtc] Не удалось выполнить renegotiation для ${userId}:`, err)
       }
+    }
+  }
+
+  function endCallWith(userId) {
+    const pc = peerConnections.value[userId]
+
+    if (pc) {
+      try {
+        pc.close()
+      } catch {}
+      delete peerConnections.value[userId]
+    }
+
+    delete mediaStore.remoteAudioStreams[userId]
+    delete mediaStore.remoteCameraStreams[userId]
+    delete mediaStore.remoteScreenStreams[userId]
+
+    mediaStore.stopVoiceDetection(userId)
+
+    mediaStore.micSenderMap.delete(userId)
+    mediaStore.camSenderMap.delete(userId)
+    mediaStore.screenSenderMap.delete(userId)
+
+    delete pendingCandidates.value[userId]
+    delete makingOfferMap.value[userId]
+    delete politeMap.value[userId]
+  }
+
+
+  function endAllCalls() {
+    Object.keys(peerConnections.value).forEach(userId => {
+      endCallWith(userId)
     })
+  }
+
+  function clearLocalTracks() {
+    if (mediaStore.localMicTrack) {
+      mediaStore.localMicTrack.stop()
+      mediaStore.localMicTrack = null
+    }
+    if (mediaStore.localCameraTrack) {
+      mediaStore.localCameraTrack.stop()
+      mediaStore.localCameraTrack = null
+    }
+    if (mediaStore.localScreenTrack) {
+      mediaStore.localScreenTrack.stop()
+      mediaStore.localScreenTrack = null
+    }
   }
 
   return {
@@ -259,8 +320,9 @@ export const useWebRTCStore = defineStore('webrtc', () => {
     handleOffer,
     handleAnswer,
     handleIceCandidate,
+    renegotiateWithAll,
     endCallWith,
     endAllCalls,
-    renegotiateWithAll
+    clearLocalTracks
   }
 })

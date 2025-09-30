@@ -99,6 +99,8 @@ export const useMediaStore = defineStore('media', () => {
         }
       }
     } catch {}
+
+    return camSettings.value 
   }
 
   function saveScreenSettings() {
@@ -180,6 +182,23 @@ export const useMediaStore = defineStore('media', () => {
     detect()
   }
   
+  function stopVoiceDetection(userId) {
+    const idNum = Number(userId)
+
+    speakingUsers.value.delete(idNum)
+
+    if (vadContexts[userId]) {
+      try {
+        vadContexts[userId].close()
+      } catch (err) {
+        console.warn(`⚠️ [VAD] Ошибка при закрытии AudioContext для ${userId}:`, err)
+      }
+      delete vadContexts[userId]
+    }
+
+    delete lastSpeakingMap[idNum]
+  }
+
   function applyMicStateToLocalStream() {
     const track = localStream.value?.getAudioTracks?.()[0]
     if (track) {
@@ -198,6 +217,7 @@ export const useMediaStore = defineStore('media', () => {
     micSettings.value.enabled = !micSettings.value.enabled
     saveMicSettings()
     applyMicStateToLocalStream()
+    callStore.sendMicStatusUpdate(micSettings.value.enabled)
   }
 
   async function toggleCamera() {
@@ -225,98 +245,71 @@ export const useMediaStore = defineStore('media', () => {
     const track = localCameraTrack.value
     if (!track) return
 
-    // ИЗМЕНЕНИЕ: ВОЗВРАЩАЕМ ЛОГИКУ ДЛЯ ОТОБРАЖЕНИЯ СВОЕЙ КАМЕРЫ
-    remoteCameraStreams.value[authStore.getUserId] = new MediaStream([track])
+    remoteCameraStreams.value[authStore.getUserId] ??= new MediaStream()
+    remoteCameraStreams.value[authStore.getUserId].addTrack(track)
 
-    let needRenegotiate = false
-
-    for (const [userId, sender] of camSenderMap.entries()) {
-      if (!sender.track) {
-        needRenegotiate = true
-      }
+    for (const sender of camSenderMap.values()) {
       await sender.replaceTrack(track)
     }
 
-    if (needRenegotiate && webrtcStore) {
-      webrtcStore.renegotiateWithAll()
-    }
-
+    webrtcStore?.renegotiateWithAll()
     callStore.sendCameraStatusUpdate(true)
   }
 
   async function stopCamera() {
     camSettings.value.enabled = false
     saveCamSettings()
-
-    const track = localCameraTrack.value
-    if (track) {
-      track.stop()
-    }
+    localCameraTrack.value?.stop()
     localCameraTrack.value = null
 
-    // ИЗМЕНЕНИЕ: УДАЛЯЕМ СВОЙ ПОТОК ИЗ СПИСКА
-    delete remoteCameraStreams.value[authStore.getUserId]
+    const stream = remoteCameraStreams.value[authStore.getUserId]
+    if (stream) {
+      stream.getVideoTracks().forEach(t => { stream.removeTrack(t); t.stop() })
+    }
 
     for (const sender of camSenderMap.values()) {
       await sender.replaceTrack(null)
     }
 
+    webrtcStore?.renegotiateWithAll()
     callStore.sendCameraStatusUpdate(false)
   }
 
   async function startScreenShare() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          frameRate: 30,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
+        video: { frameRate: 30, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
       })
 
       const track = stream.getVideoTracks()[0]
-      if (!track) {
-        console.warn('❌ Нет видеотрека в screen stream')
-        return
-      }
+      if (!track) return
+      track.contentHint = "detail"
 
       localScreenStream.value = stream
       localScreenTrack.value = track
       screenSettings.value.enabled = true
       saveScreenSettings()
 
-      // ИЗМЕНЕНИЕ: ВОЗВРАЩАЕМ ЛОГИКУ ДЛЯ ОТОБРАЖЕНИЯ СВОЕЙ ДЕМКИ
-      remoteScreenStreams.value[authStore.getUserId] = stream
+      remoteScreenStreams.value[authStore.getUserId] ??= new MediaStream()
+      remoteScreenStreams.value[authStore.getUserId].addTrack(track)
 
-      let needRenegotiate = false
-
-      for (const [userId, sender] of screenSenderMap.entries()) {
-        if (!sender.track) {
-          needRenegotiate = true
-        }
+      for (const sender of screenSenderMap.values()) {
         await sender.replaceTrack(track)
+        sender?.requestKeyFrame?.()
       }
 
-      if (needRenegotiate && webrtcStore) {
-        webrtcStore.renegotiateWithAll()
-      }
-
+      webrtcStore?.renegotiateWithAll()
       callStore.sendScreenStatusUpdate(true)
 
-      track.onended = () => {
-        stopScreenShare()
-      }
+      track.onended = () => stopScreenShare()
     } catch (err) {
-      console.warn('❌ Ошибка при старте демонстрации экрана:', err)
+      console.warn("❌ Ошибка при старте демонстрации экрана:", err)
     }
   }
 
   async function stopScreenShare() {
-    const track = localScreenTrack.value
-    if (track) {
-      track.stop()
-    }
+    localScreenTrack.value?.stop()
     localScreenStream.value = null
     localScreenTrack.value = null
 
@@ -324,14 +317,16 @@ export const useMediaStore = defineStore('media', () => {
     saveScreenSettings()
     callStore.sendScreenStatusUpdate(false)
 
-    // ИЗМЕНЕНИЕ: УДАЛЯЕМ СВОЙ ПОТОК ИЗ СПИСКА
     delete remoteScreenStreams.value[authStore.getUserId]
 
     for (const sender of screenSenderMap.values()) {
       await sender.replaceTrack(null)
     }
+
+    webrtcStore?.renegotiateWithAll()
   }
-  
+
+
   async function setMicDevice(deviceId) {
     micSettings.value.deviceId = deviceId
     saveMicSettings()
@@ -452,7 +447,7 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   async function initMediaTracks() {
-    if (!localMicTrack.value) {
+    if (!localMicTrack.value || localMicTrack.value.readyState === 'ended') {
       await setMicDevice(micSettings.value.deviceId)
 
       for (const [userId, sender] of micSenderMap.entries()) {
@@ -467,6 +462,7 @@ export const useMediaStore = defineStore('media', () => {
       startVoiceDetection(authStore.getUserId, localStream.value, false)
     }
   }
+
 
   function hasLiveVideo(userId) {
     const checkTrack = (track) =>
@@ -513,6 +509,7 @@ export const useMediaStore = defineStore('media', () => {
     startCamera,
     stopCamera,
     startVoiceDetection,
+    stopVoiceDetection,
     initMediaTracks,
     hasLiveVideo,
     cleanupAllRemoteStreams,

@@ -1,5 +1,79 @@
 <template>
+  <!-- Системное сообщение -->
   <div
+    v-if="isSystemMessage"
+    :id="`msg-${props.message.message_id}`"
+    class="flex items-center justify-center text-sm text-gray-700 bg-gray-100 rounded-xl shadow px-4 py-3 mx-4 my-2 text-center"
+  >
+   <div
+      v-if="props.message.call_info"
+      class="flex flex-col items-start w-full gap-2 relative"
+    >
+      <!-- 🟢 Текст статуса звонка -->
+      <div class="flex items-center gap-2 text-sm text-gray-800 font-medium">
+        <PhoneIcon v-if="props.message.call_info.status === 'ongoing'" class="w-4 h-4 text-green-600" />
+        <PhoneOffIcon v-else-if="props.message.call_info.status === 'ended'" class="w-4 h-4 text-gray-400" />
+        <PhoneMissedIcon v-else-if="props.message.call_info.status === 'missed'" class="w-4 h-4 text-red-500" />
+        <XIcon v-else-if="props.message.call_info.status === 'cancelled'" class="w-4 h-4 text-gray-400" />
+
+        <span>
+          {{
+            props.message.call_info.status === 'ongoing'
+              ? 'Звонок начался'
+              : props.message.call_info.status === 'ended'
+                ? 'Звонок завершён'
+                : props.message.call_info.status === 'missed'
+                  ? 'Пропущенный звонок'
+                  : 'Звонок отменён'
+          }}
+        </span>
+
+        <!-- ⏱️ Таймер или длительность -->
+        <span class="text-xs text-gray-500 ml-2">
+          {{
+            props.message.call_info.status === 'ongoing'
+              ? liveDuration
+              : props.message.call_info.duration
+                ? '(' + formatDuration(props.message.call_info.duration) + ')'
+                : ''
+          }}
+        </span>
+
+        <!-- 📞 Кнопка присоединения -->
+        <button
+          v-if="!isParticipant && props.message.call_info.status === 'ongoing'"
+          @click="joinCall"
+          class="ml-auto inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+        >
+          <PhoneCallIcon class="w-4 h-4" />
+          Присоединиться
+        </button>
+      </div>
+
+      <!-- 👥 Участники (реактивные) -->
+      <div class="flex flex-wrap gap-3 items-center">
+        <div
+          v-for="(status, uid) in callStore.callMembers"
+          :key="uid"
+          class="flex items-center gap-2"
+        >
+          <img
+            :src="chatStore.users[uid]?.avatar_url || '/default-avatar.png'"
+            class="w-6 h-6 rounded-full object-cover"
+          />
+          <span class="text-xs text-gray-600">
+            {{ chatStore.users[uid]?.username || 'неизвестно' }}
+            <span v-if="status === 'joined'" class="text-green-600">(вызов принят)</span>
+            <span v-else-if="status === 'calling'" class="text-yellow-500">(ожидание)</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Обычное сообщение -->
+  <div
+    v-else
     :id="`msg-${props.message.message_id}`"
     class="relative group flex items-start gap-3 px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-50 transition"
   >
@@ -111,17 +185,38 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ReplyIcon, EditIcon, PinIcon, TrashIcon, Users } from 'lucide-vue-next'
+import {
+  ref,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  watch
+} from 'vue'
+import {
+  ReplyIcon,
+  EditIcon,
+  PinIcon,
+  TrashIcon,
+  Users,
+  PhoneIcon,
+  PhoneOffIcon,
+  PhoneMissedIcon,
+  XIcon,
+  PhoneCallIcon
+} from 'lucide-vue-next'
+
 import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../../../store/chatStore'
+import { useCallStore } from '../../../store/call/callStore'
 import { loadAttachmentUrls } from '../../../utils/attachmentUtils'
 import MessageGallery from './messageGallery.vue'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()
+const callStore = useCallStore()
 
 const emit = defineEmits(['reply-to-message', 'edit-message', 'scroll-to-message'])
+
 const props = defineProps({
   message: {
     type: Object,
@@ -129,9 +224,43 @@ const props = defineProps({
   }
 })
 
+// ========== SYSTEM MESSAGE ==========
+const isSystemMessage = computed(() =>
+  props.message.user_id === '' &&
+  props.message.username === 'system' &&
+  props.message.type.startsWith('call_')
+)
+
+const isParticipant = computed(() =>
+  props.message.call_info?.participants.includes(String(authStore.getUserId))
+)
+
+// ========== LIVE DURATION ==========
+const liveDuration = ref('')
+let interval = null
+
+function updateLiveDuration() {
+  if (!props.message.call_info?.started_at) return
+  const now = Date.now()
+  const startedAt = props.message.call_info.started_at * 1000
+  const diff = now - startedAt
+  const totalSeconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  liveDuration.value = `${minutes}м ${seconds < 10 ? '0' : ''}${seconds}с`
+}
+
+// ========== JOIN CALL ==========
+function joinCall() {
+  callStore.joinCall()
+}
+
+// ========== USER INFO ==========
 const user = computed(() => chatStore.users[String(props.message.user_id)] || {})
 const avatarUrl = computed(() => user.value.avatar_url)
+const isMyMessage = props.message.user_id == authStore.getUserId
 
+// ========== ATTACHMENTS ==========
 const attachmentUrls = ref({})
 const fullscreenImageUrl = ref(null)
 
@@ -149,15 +278,17 @@ function onEsc(event) {
   }
 }
 
-onMounted(() => {
-  window.addEventListener('keydown', onEsc)
-})
+watch(() => props.message.attachments, () => {
+  loadAttachmentUrls([props.message], chatStore.imageUrlCache, attachmentUrls)
+}, { immediate: true })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onEsc)
-})
+// ========== FORMATTING ==========
+function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}м ${s < 10 ? '0' : ''}${s}с`
+}
 
-const isMyMessage = props.message.user_id == authStore.getUserId
 const onlyImage = computed(() => {
   return (
     props.message.text.trim() === '' &&
@@ -188,18 +319,16 @@ const formattedEditDate = computed(() => {
 const repliedMessageText = computed(() => {
   const replied = chatStore.messages.find(m => m.message_id === props.message.reply_to)
   if (!replied || typeof replied.text !== 'string') return '[сообщение удалено]'
-
   if (replied.text != '') return replied.text
   if (onlyImage) return 'Изображение'
-
   const isEdited = replied.edited_at != null
   if (isEdited && replied.text.trim() !== props.message.reply_to_text?.trim()) {
     return replied.text + ' (изменено)'
   }
-
   return replied.text
 })
 
+// ========== ACTIONS ==========
 function reply() {
   emit('reply-to-message', props.message)
 }
@@ -217,7 +346,18 @@ function remove() {
   chatStore.deleteMessage(props.message)
 }
 
-watch(() => props.message.attachments, () => {
-  loadAttachmentUrls([props.message], chatStore.imageUrlCache, attachmentUrls)
-}, { immediate: true })
+// ========== MOUNT/UNMOUNT ==========
+onMounted(() => {
+  window.addEventListener('keydown', onEsc)
+
+  if (props.message.call_info?.status === 'ongoing') {
+    updateLiveDuration()
+    interval = setInterval(updateLiveDuration, 1000)
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onEsc)
+  if (interval) clearInterval(interval)
+})
 </script>

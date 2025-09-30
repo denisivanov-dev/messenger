@@ -204,6 +204,51 @@ func PinMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, pin boo
 	return nil
 }
 
+func UpdateSystemMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, updated common.OutgoingMessage) bool {
+	historyKey := "chat:history:" + chatID
+	queueKey := "to_edit:global"
+	if chatID != "1" {
+		queueKey = "to_edit:private:" + chatID
+	}
+
+	vals, err := redis.LRange(rdb, historyKey, 0, -1)
+	if err != nil {
+		log.Printf("redis lrange error: %v", err)
+		return false
+	}
+
+	for i, raw := range vals {
+		var msg common.OutgoingMessage
+		if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+			continue
+		}
+
+		if msg.MessageID != messageID {
+			continue
+		}
+
+		NormalizeMessage(&updated, chatID)
+
+		updatedRaw, err := json.Marshal(updated)
+		if err != nil {
+			log.Printf("marshal system message error: %v", err)
+			return false
+		}
+
+		if err := rdb.LSet(context.Background(), historyKey, int64(i), updatedRaw).Err(); err != nil {
+			log.Printf("redis lset error: %v", err)
+			return false
+		}
+
+		redis.RPush(rdb, queueKey, updatedRaw)
+		return true
+	}
+
+	log.Printf("message ID %s not found in chat %s", messageID, chatID)
+	return false
+}
+
+
 func LoadMessageHistory(rdb *rds.Client, chatID string, limit int64) ([]common.OutgoingMessage, error) {
 	vals, err := redis.LRange(rdb, "chat:history:"+chatID, -limit, -1)
 	if err != nil {

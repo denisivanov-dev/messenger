@@ -57,7 +57,6 @@ type IncomingInitPrivate struct {
 	ReceiverID string `json:"receiver_id"`
 }
 
-
 type OutgoingMessage struct {
 	MessageID   string `json:"message_id"`
 	Text        string `json:"text"`
@@ -73,6 +72,16 @@ type OutgoingMessage struct {
 	ReplyToUser string `json:"reply_to_user,omitempty"`
 	Pinned      bool   `json:"pinned"`
 	Attachments   []Attachment `json:"attachments,omitempty"`
+
+	CallInfo *CallInfo `json:"call_info,omitempty"`
+}
+
+type CallInfo struct {
+	Status       string   `json:"status"`                 // "ongoing", "ended", "missed", "cancelled"
+	Participants []string `json:"participants,omitempty"` // IDs
+	StartedAt    int64    `json:"started_at,omitempty"`
+	EndedAt      int64    `json:"ended_at,omitempty"`
+	Duration     int64    `json:"duration,omitempty"`     // в секундах
 }
 
 type TypingMessage struct {
