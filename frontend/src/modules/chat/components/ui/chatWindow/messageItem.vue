@@ -3,19 +3,37 @@
   <div
     v-if="isSystemMessage"
     :id="`msg-${props.message.message_id}`"
-    class="flex items-center justify-center text-sm text-gray-700 bg-gray-100 rounded-xl shadow px-4 py-3 mx-4 my-2 text-center"
+    class="relative flex items-start gap-3 px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-200 transition my-2"
   >
-   <div
-      v-if="props.message.call_info"
-      class="flex flex-col items-start w-full gap-2 relative"
-    >
-      <!-- 🟢 Текст статуса звонка -->
-      <div class="flex items-center gap-2 text-sm text-gray-800 font-medium">
-        <PhoneIcon v-if="props.message.call_info.status === 'ongoing'" class="w-4 h-4 text-green-600" />
-        <PhoneOffIcon v-else-if="props.message.call_info.status === 'ended'" class="w-4 h-4 text-gray-400" />
-        <PhoneMissedIcon v-else-if="props.message.call_info.status === 'missed'" class="w-4 h-4 text-red-500" />
-        <XIcon v-else-if="props.message.call_info.status === 'cancelled'" class="w-4 h-4 text-gray-400" />
+    <!-- Иконка звонка -->
+    <div class="mt-0.5 w-8 h-8 flex items-center justify-center rounded-full bg-white border border-gray-300">
+      <PhoneIcon
+        v-if="props.message.call_info.status === 'ongoing'"
+        class="w-4 h-4 text-green-600"
+      />
+      <PhoneOffIcon
+        v-else-if="props.message.call_info.status === 'ended'"
+        class="w-4 h-4 text-gray-400"
+      />
+      <PhoneMissedIcon
+        v-else-if="props.message.call_info.status === 'missed'"
+        class="w-4 h-4 text-red-500"
+      />
+      <XIcon
+        v-else-if="props.message.call_info.status === 'cancelled'"
+        class="w-4 h-4 text-gray-400"
+      />
+    </div>
 
+    <!-- Контент -->
+    <div class="flex-1 relative">
+      <!-- Дата -->
+      <div class="absolute top-0 right-0 mt-1 mr-2 text-[11px] text-gray-400">
+        {{ formattedDate }}
+      </div>
+
+      <!-- Заголовок + стрелка -->
+      <div class="mb-1 text-sm text-gray-800 font-medium flex items-center gap-1">
         <span>
           {{
             props.message.call_info.status === 'ongoing'
@@ -28,46 +46,60 @@
           }}
         </span>
 
-        <!-- ⏱️ Таймер или длительность -->
-        <span class="text-xs text-gray-500 ml-2">
-          {{
-            props.message.call_info.status === 'ongoing'
-              ? liveDuration
-              : props.message.call_info.duration
-                ? '(' + formatDuration(props.message.call_info.duration) + ')'
-                : ''
-          }}
-        </span>
+        <!-- Стрелка + попап -->
+        <div class="relative inline-block">
+          <button
+            @click="toggleParticipants"
+            class="text-gray-500 hover:text-gray-800"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform"
+                :class="{ 'rotate-180': showParticipants }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-        <!-- 📞 Кнопка присоединения -->
-        <button
-          v-if="!isParticipant && props.message.call_info.status === 'ongoing'"
-          @click="joinCall"
-          class="ml-auto inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
-        >
-          <PhoneCallIcon class="w-4 h-4" />
-          Присоединиться
-        </button>
-      </div>
+          <!-- Попап участников (над стрелкой) -->
+          <transition name="fade">
+            <div
+              v-if="showParticipants"
+              class="absolute bottom-full mb-2 left-0 bg-white border border-gray-200 shadow-lg rounded-lg w-64 max-h-40 overflow-y-auto z-50"
+            >
+              <!-- Заголовок -->
+              <div class="px-2 py-1 border-b text-xs font-semibold text-gray-600 bg-gray-50">
+                Список участников
+              </div>
 
-      <!-- 👥 Участники (реактивные) -->
-      <div class="flex flex-wrap gap-3 items-center">
-        <div
-          v-for="(status, uid) in callStore.callMembers"
-          :key="uid"
-          class="flex items-center gap-2"
-        >
-          <img
-            :src="chatStore.users[uid]?.avatar_url || '/default-avatar.png'"
-            class="w-6 h-6 rounded-full object-cover"
-          />
-          <span class="text-xs text-gray-600">
-            {{ chatStore.users[uid]?.username || 'неизвестно' }}
-            <span v-if="status === 'joined'" class="text-green-600">(вызов принят)</span>
-            <span v-else-if="status === 'calling'" class="text-yellow-500">(ожидание)</span>
-          </span>
+              <!-- Участники -->
+              <div class="p-2">
+                <div
+                  v-for="uid in props.message.call_info.participants"
+                  :key="uid"
+                  class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded"
+                >
+                  <img
+                    :src="chatStore.users[uid]?.avatar_url || '/default-avatar.png'"
+                    class="w-6 h-6 rounded-full object-cover"
+                  />
+                  <span class="text-xs text-gray-700">
+                    {{ chatStore.users[uid]?.username || 'Неизвестно' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
+
+      <!-- Длительность звонка -->
+      <p class="text-xs text-gray-600">
+        {{
+          props.message.call_info.status === 'ongoing'
+            ? 'В звонке: ' + liveDuration
+            : props.message.call_info.duration
+              ? 'Длительность: ' + formatDuration(props.message.call_info.duration)
+              : ''
+        }}
+      </p>
     </div>
   </div>
 
@@ -224,9 +256,15 @@ const props = defineProps({
   }
 })
 
+const showParticipants = ref(false)
+
+function toggleParticipants() {
+  showParticipants.value = !showParticipants.value
+}
+
 // ========== SYSTEM MESSAGE ==========
 const isSystemMessage = computed(() =>
-  props.message.user_id === '' &&
+  props.message.user_id === '0' &&
   props.message.username === 'system' &&
   props.message.type.startsWith('call_')
 )

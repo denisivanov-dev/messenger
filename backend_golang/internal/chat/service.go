@@ -65,7 +65,7 @@ func BuildSystemMessage(msgType string, chatType string, fromUserID string, toUs
 		MessageID:  uuid.NewString(),
 		ChatID:     chatID,
 		Type:       msgType,
-		UserID:     "",
+		UserID:     "0",
 		Username:   "system",
 		Text:       "",
 		Timestamp:  time.Now().UnixMilli(),

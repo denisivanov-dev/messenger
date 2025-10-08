@@ -373,9 +373,14 @@ func (c *Client) ReadPump() {
 					participants := voice.GetCallHistoryParticipants(c.RDB, roomID)
 
 					updatedMsg := common.OutgoingMessage{
-						Type:      "call_started",
-						MessageID: msgID,
-						ChatID:    roomID,
+						Type:       "call_started",
+						MessageID:  msgID,
+						ChatID:     roomID,
+						Timestamp:  startedAt * 1000,
+						Username:   "system",
+						UserID:     "0",
+						ReceiverID: payload.ReceiverID,      
+						Pinned:     false,
 						CallInfo: &common.CallInfo{
 							Status:       "ended",
 							StartedAt:    startedAt,
@@ -392,6 +397,7 @@ func (c *Client) ReadPump() {
 					voice.ClearCallHistoryParticipants(c.RDB, roomID)
 				}
 			}
+
 
 		case "webrtc_offer":
 			var payload common.IncomingWebRTCOffer

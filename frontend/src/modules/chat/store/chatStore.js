@@ -149,17 +149,21 @@ export const useChatStore = defineStore('chat', () => {
         callStore.updateMicStatus(msg.from_user, msg.enabled)
       }
 
-      if (msg.type === 'update_message' && msg.call_info) {
-        const messageID = msg.message_id
-        const callInfo = msg.call_info
-
-        messagesStore.updateMessage(messageID, {
-          call_info: callInfo
-        })
+      if (msg.type === 'call_started') {
+        if (msg.call_info.status === 'ongoing') {
+          messagesStore.pushFromWs(msg)
+        } else {
+          const existing = messagesStore.findById(msg.message_id)
+          if (existing) {
+            messagesStore.updateSystemMessage(msg)
+          } else {
+            messagesStore.pushFromWs(msg)
+          }
+        }
 
         return
       }
-            
+                  
       const shouldAutoScroll = isNearBottom()
       messagesStore.pushFromWs(msg)
     }, mode, receiverId)

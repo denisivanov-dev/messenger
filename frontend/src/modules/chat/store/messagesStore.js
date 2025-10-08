@@ -32,6 +32,26 @@ export const useMessagesStore = defineStore('messages', () => {
     shouldScroll.value = isNearBottom()
   }
 
+  function findById(messageId) {
+    return messages.value.find(m => m.message_id === messageId)
+  }
+
+  function updateSystemMessage(newMsg) {
+    const index = messages.value.findIndex(m => m.message_id === newMsg.message_id)
+    if (index === -1) return
+
+    messages.value[index] = {
+      ...messages.value[index],
+      ...newMsg,
+      call_info: {
+        ...messages.value[index].call_info,
+        ...newMsg.call_info
+      }
+    }
+
+    shouldScroll.value = isNearBottom()
+  }
+
   function handleDeleted(messageId) {
     messages.value = messages.value.filter(m => m.message_id !== messageId)
   }
@@ -144,5 +164,8 @@ export const useMessagesStore = defineStore('messages', () => {
     editMessage,
     pinMessage,
     openOrCreatePrivateChat,
+
+    findById,
+    updateSystemMessage
   }
 })
