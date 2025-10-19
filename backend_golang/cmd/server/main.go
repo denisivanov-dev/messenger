@@ -8,6 +8,8 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	
+	"messenger/backend_golang/internal/gateway/handlers/register"
 	"messenger/backend_golang/internal/pubsub"
 	"messenger/backend_golang/internal/ws"
 )
@@ -35,6 +37,8 @@ func main() {
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		log.Fatalf("Redis недоступен: %v", err)
 	}
+
+	register.RegisterAllModules()
 
 	hub := ws.NewHub()
 	go hub.Run()

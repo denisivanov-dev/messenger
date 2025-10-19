@@ -73,3 +73,62 @@ func BuildSystemMessage(msgType string, chatType string, fromUserID string, toUs
 		CallInfo:   callInfo,
 	}
 }
+
+package chat
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+
+	rds "github.com/redis/go-redis/v9"
+	"messenger/backend_golang/internal/utils"
+)
+
+// формирует chatKey: private:userA:userB или system-room
+func GetRoomKey(userID, chatType, receiverID string) string {
+	if chatType == "private" {
+		return utils.GeneratePrivateChatKey(userID, receiverID)
+	}
+	return "1"
+}
+
+// проверяет через Redis, имеет ли пользователь доступ к чату
+func ResolveRoom(rdb *rds.Client, userID, chatType, receiverID string) (string, bool) {
+	ctx := context.Background()
+	chatKey := GetRoomKey(userID, chatType, receiverID)
+
+	if chatKey == "1" {
+		return chatKey, true
+	}
+
+	chatID, err := rdb.Get(ctx, fmt.Sprintf("chat_id:%s", chatKey)).Result()
+	if err != nil {
+		log.Printf("Redis GET chat_id:%s failed: %v", chatKey, err)
+		return "", false
+	}
+
+	ok, err := rdb.SIsMember(ctx, fmt.Sprintf("chat:%s:participants", chatID), userID).Result()
+	if err != nil || !ok {
+		log.Printf("Access denied: user %s not in chat %s", userID, chatID)
+		return "", false
+	}
+
+	return chatKey, true
+}
+
+// отправляет последние сообщения из Redis клиенту
+func SendHistory(rdb *rds.Client, roomID string, send chan []byte, limit int) {
+	msgs, err := LoadMessageHistory(rdb, roomID, int64(limit))
+	if err != nil {
+		log.Printf("failed to load chat history for %s: %v", roomID, err)
+		return
+	}
+
+	for _, msg := range msgs {
+		if out, err := json.Marshal(msg); err == nil {
+			send <- out
+		}
+	}
+}
