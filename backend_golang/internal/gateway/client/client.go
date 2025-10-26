@@ -11,19 +11,63 @@ import (
 
 	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/gateway/hub"
-	"messenger/backend_golang/internal/online"
+	"messenger/backend_golang/internal/gateway/types"
+	"messenger/backend_golang/internal/modules/online"
+)
+
+const (
+	WriteWait  = 10 * time.Second
+	PongWait   = 60 * time.Second
+	PingPeriod = PongWait * 9 / 10
 )
 
 type Client struct {
-	Hub      *hub.Hub
+	Hub      types.HubLike
 	Conn     *websocket.Conn
-	Send     chan []byte
+	SendChan chan []byte
 	UserID   string
-	Username string
+	Name     string
 	RDB      *rds.Client
 	Rooms    map[string]struct{}
+
 	once     sync.Once
 }
+
+// === ClientLike Interface Implementation ===
+
+func (c *Client) ID() string { 
+	return c.UserID 
+}
+
+func (c *Client) Username() string {
+	return c.Name
+}
+
+func (c *Client) GetHub() types.HubLike {
+	return c.Hub
+}
+
+func (c *Client) GetRedis() *rds.Client {
+	return c.RDB
+}
+
+func (c *Client) GetSendChannel() chan []byte {
+	return c.SendChan
+}
+
+func (c *Client) GetRooms() map[string]struct{} {
+	return c.Rooms
+}
+
+func (c *Client) Send(data []byte) {
+	select {
+	case c.SendChan <- data:
+	default:
+		log.Printf("[client %s] send buffer full", c.UserID)
+	}
+}
+
+// --- Core network pumps ---
 
 func (c *Client) ReadPump() {
 	log.Printf("[client %s] connected", c.UserID)
@@ -41,6 +85,7 @@ func (c *Client) ReadPump() {
 		}
 
 		hub.Handle(c, raw)
+		// _ = raw // placeholder to avoid unused var
 	}
 }
 
@@ -53,7 +98,7 @@ func (c *Client) WritePump() {
 
 	for {
 		select {
-		case msg, ok := <-c.Send:
+		case msg, ok := <-c.SendChan:
 			_ = c.Conn.SetWriteDeadline(time.Now().Add(WriteWait))
 			if !ok {
 				log.Printf("[client %s] send channel closed", c.UserID)
@@ -74,6 +119,8 @@ func (c *Client) WritePump() {
 	}
 }
 
+// --- Cleanup on disconnect ---
+
 func (c *Client) cleanup() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -83,15 +130,13 @@ func (c *Client) cleanup() {
 
 	log.Printf("[client %s] cleanup started", c.UserID)
 
-	c.Hub.Broadcast <- hub.RoomMessage{
-		RoomID: common.SystemRoomID,
+	c.Hub.BroadcastMessage(types.RoomMessage{
+		RoomID: types.SystemRoom,
 		Data:   online.BuildStatusMessage(c.UserID, common.Offline),
-	}
+	})
 
 	_ = online.SetOffline(context.Background(), c.RDB, c.UserID)
-
-	c.Hub.Unregister <- c
-
+	c.Hub.UnregisterClient(c)
 	_ = c.Conn.Close()
 
 	log.Printf("[client %s] disconnected", c.UserID)

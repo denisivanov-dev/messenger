@@ -12,6 +12,8 @@ import { useEventsStore } from './eventsStore'
 import { useCallStore } from './call/callStore'
 import { useWebRTCStore } from './call/webrtcStore'
 
+import { chatHandlersRegistry } from './handlers/chatHandlersRegistry'
+
 export const useChatStore = defineStore('chat', () => {
   const messagesStore = useMessagesStore()
   const userStore = useUserStore()
@@ -34,7 +36,7 @@ export const useChatStore = defineStore('chat', () => {
   function setChatModeGlobal() {
     chatType.value = 'global'
     receiverID.value = null
-    eventsStore.clearTyping()   
+    eventsStore.clearTyping()
     messagesStore.clear()
     localStorage.setItem('chatMode', 'global')
     if (connected.value) {
@@ -45,7 +47,7 @@ export const useChatStore = defineStore('chat', () => {
   function setChatModePrivate(targetID) {
     chatType.value = 'private'
     receiverID.value = targetID
-    eventsStore.clearTyping()   
+    eventsStore.clearTyping()
     messagesStore.clear()
     localStorage.setItem('chatMode', 'private')
     localStorage.setItem('receiverId', targetID)
@@ -61,109 +63,29 @@ export const useChatStore = defineStore('chat', () => {
   // --- CONNECTION ---
   function startChat(token, mode = 'global', receiverId = null) {
     messagesStore.clear()
-
     const authStore = useAuthStore()
     const myId = authStore.getUserId
 
     connect(token, (msg) => {
       console.info('[ws message]', JSON.stringify(msg, null, 2))
 
-      if (msg.event === 'user_status') {
-        userStore.applyStatus(msg.user_id, msg.status)
+      const handler = chatHandlersRegistry[msg.type] || chatHandlersRegistry[msg.event]
+      if (handler) {
+        handler(msg, {
+          userStore,
+          messagesStore,
+          friendsStore,
+          eventsStore,
+          callStore,
+          webrtcStore,
+          chatType,
+          receiverID,
+          myId
+        })
         return
       }
 
-      if (msg.type === 'typing') {
-        eventsStore.handleTypingWs(msg, chatType.value, myId, receiverID.value)
-        return
-      }
-
-      if (msg.type === 'message_deleted') {
-        messagesStore.handleDeleted(msg.message_id)
-        return
-      }
-
-      if (msg.type === 'message_edited') {
-        console.info('message_edited payload:', JSON.stringify(msg))
-        messagesStore.handleEdited(msg.message_id, msg.new_text, msg.edited_at)
-        return
-      }
-
-      if (msg.type === 'message_pinned') {
-        console.info('message_pinned payload:', JSON.stringify(msg))
-        messagesStore.handlePinned(msg.message_id, msg.action)
-        return
-      }
-
-      if (msg.type === 'friend_request_update') {
-        friendsStore.applyFriendRequestUpdate(msg)
-        return
-      }
-
-      if (msg.type === 'incoming_call') {
-        callStore.handleIncomingCall(msg.from_user)
-        return
-      }
-
-      if (msg.type === 'incoming_cancel_call') {
-        callStore.handleCallCanceled(msg.from_user)
-        return
-      }
-
-      if (msg.type === 'incoming_call_answer') {
-        callStore.handleCallAnswer(msg.from_user, msg.accepted)
-      }
-
-      if (msg.type === 'incoming_join_call') {
-        callStore.handleJoinCall(msg.from_user)
-      }
-
-      if (msg.type === 'incoming_leave_call') {
-        callStore.handleLeaveCall(msg.from_user)
-      }
-
-      if (msg.type === 'incoming_webrtc_offer') {
-        webrtcStore.handleOffer(msg.from_user, msg.offer)
-        return
-      }
-
-      if (msg.type === 'incoming_webrtc_answer') {
-        webrtcStore.handleAnswer(msg.from_user, msg.answer)
-        return
-      }
-
-      if (msg.type === 'incoming_ice_candidate') {
-        webrtcStore.handleIceCandidate(msg.from_user, msg.candidate)
-        return
-      }
-
-      if (msg.type === 'incoming_camera_status') {
-        callStore.updateCameraStatus(msg.from_user, msg.enabled)
-      }
-
-      if (msg.type === 'incoming_screen_status') {
-        callStore.updateScreenStatus(msg.from_user, msg.enabled)
-      }
-
-      if (msg.type === 'incoming_mic_status') {
-        callStore.updateMicStatus(msg.from_user, msg.enabled)
-      }
-
-      if (msg.type === 'call_started') {
-        if (msg.call_info.status === 'ongoing') {
-          messagesStore.pushFromWs(msg)
-        } else {
-          const existing = messagesStore.findById(msg.message_id)
-          if (existing) {
-            messagesStore.updateSystemMessage(msg)
-          } else {
-            messagesStore.pushFromWs(msg)
-          }
-        }
-
-        return
-      }
-                  
+      // fallback если хендлер не найден
       const shouldAutoScroll = isNearBottom()
       messagesStore.pushFromWs(msg)
     }, mode, receiverId)
@@ -185,6 +107,7 @@ export const useChatStore = defineStore('chat', () => {
   function sendTyping() {
     eventsStore.sendTyping(chatType.value, receiverID.value)
   }
+
   function setTyping(username) {
     eventsStore.setTyping(username)
   }
@@ -218,7 +141,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // --- FRIENDS ---
   const getFriends = friendsStore.getFriends
-  const sendFriendRequest  = friendsStore.sendFriendRequest
+  const sendFriendRequest = friendsStore.sendFriendRequest
   const cancelFriendRequest = friendsStore.cancelFriendRequest
   const acceptFriendRequest = friendsStore.acceptFriendRequest
   const declineFriendRequest = friendsStore.declineFriendRequest

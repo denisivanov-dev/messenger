@@ -4,16 +4,13 @@ import (
 	"encoding/json"
 	"log"
 
-	"messenger/backend_golang/internal/gateway/client"
+	"messenger/backend_golang/internal/gateway/types"
 )
 
-type HandlerFunc func(c *client.Client, raw json.RawMessage)
+type HandlerFunc func(c types.ClientLike, raw json.RawMessage)
 
-// registry — таблица всех зарегистрированных хендлеров.
-// Ключ — тип сообщения ("send_message", "start_call", и т.д.).
 var registry = make(map[string]HandlerFunc)
 
-// Register — регистрирует новый обработчик по типу.
 func Register(msgType string, fn HandlerFunc) {
 	if _, exists := registry[msgType]; exists {
 		log.Printf("[hub] handler already registered for type: %s", msgType)
@@ -23,8 +20,7 @@ func Register(msgType string, fn HandlerFunc) {
 	log.Printf("[hub] registered handler: %s", msgType)
 }
 
-// Handle — точка входа: получает JSON от клиента, парсит "type" и вызывает нужный хендлер.
-func Handle(c *client.Client, raw []byte) {
+func Handle(c types.ClientLike, raw []byte) {
 	var base struct {
 		Type string `json:"type"`
 	}

@@ -1,11 +1,17 @@
 package client
 
+import "messenger/backend_golang/internal/gateway/types"
+
 func (c *Client) JoinRoomIfNotJoined(roomID string) {
 	if _, ok := c.Rooms[roomID]; ok {
 		return
 	}
 	c.Rooms[roomID] = struct{}{}
-	c.Hub.JoinRoom <- joinReq{Client: c, RoomID: roomID}
+
+	c.Hub.JoinRoom(types.JoinRequest{
+		Client: c,
+		RoomID: roomID,
+	})
 }
 
 func (c *Client) LeaveAllExcept(allowedRoomIDs ...string) {

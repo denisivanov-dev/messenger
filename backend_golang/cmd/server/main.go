@@ -8,10 +8,11 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
-	
+
 	"messenger/backend_golang/internal/gateway/handlers/register"
+	"messenger/backend_golang/internal/gateway/hub"
 	"messenger/backend_golang/internal/pubsub"
-	"messenger/backend_golang/internal/ws"
+	"messenger/backend_golang/internal/gateway/ws"
 )
 
 func main() {
@@ -35,21 +36,20 @@ func main() {
 
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Redis недоступен: %v", err)
+		log.Fatalf("Redis unavailable: %v", err)
 	}
 
 	register.RegisterAllModules()
 
-	hub := ws.NewHub()
-	go hub.Run()
+	h := hub.NewHub()
 
-	pubsub.StartFriendRequestSubscriber(ctx, rdb, hub)
+	pubsub.StartFriendRequestSubscriber(ctx, rdb, h)
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		ws.ServeWS(hub, rdb, w, r)
+		ws.ServeWS(h, rdb, w, r)
 	})
 
-	log.Printf("Сервер слушает %s...", listenAddr)
+	log.Printf("Server listening on %s...", listenAddr)
 	if err := http.ListenAndServe(listenAddr, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}

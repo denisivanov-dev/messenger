@@ -3,6 +3,8 @@ package hub
 import (
 	"encoding/json"
 	"log"
+
+	"messenger/backend_golang/internal/gateway/types"
 )
 
 // SendToUser sends a payload to a single connected user
@@ -44,15 +46,11 @@ func (h *Hub) SendToUsers(userIDs []string, payload any) {
 }
 
 // SafeSend tries to send data to client and unregisters on failure
-func SafeSend(c *Client, data []byte, onDrop func()) {
+func SafeSend(c types.ClientLike, data []byte, onDrop func()) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("panic in SafeSend: %v", r)
 		}
 	}()
-	select {
-	case c.Send <- data:
-	default:
-		onDrop()
-	}
+	c.Send(data)
 }

@@ -7,10 +7,15 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"messenger/backend_golang/internal/common"
-	"messenger/backend_golang/internal/ws"
+	"messenger/backend_golang/internal/gateway/types"
 )
 
-func StartFriendRequestSubscriber(ctx context.Context, rdb *redis.Client, hub *ws.Hub) {
+// optional interface for hubs that support direct user messaging
+type userSender interface {
+	SendToUser(userID string, data any)
+}
+
+func StartFriendRequestSubscriber(ctx context.Context, rdb *redis.Client, hub types.HubLike) {
 	pubsub := rdb.Subscribe(ctx, "friend_requests")
 	ch := pubsub.Channel()
 
@@ -22,83 +27,89 @@ func StartFriendRequestSubscriber(ctx context.Context, rdb *redis.Client, hub *w
 				continue
 			}
 
+			sender, ok := hub.(userSender)
+			if !ok {
+				log.Printf("Hub does not implement SendToUser()")
+				continue
+			}
+
 			if payload.Type == "friend_request_sent" {
 				log.Printf("Sent friend request from %s to %s", payload.FromID, payload.ToID)
 
-				hub.SendToUser(payload.FromID, map[string]any{
+				sender.SendToUser(payload.FromID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.ToID,
-					"status":  "outgoing", // для отправителя
+					"status":  "outgoing", // for sender
 				})
 
-				hub.SendToUser(payload.ToID, map[string]any{
+				sender.SendToUser(payload.ToID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.FromID,
-					"status":  "incoming", // для получателя
+					"status":  "incoming", // for receiver
 				})
 			}
 
 			if payload.Type == "friend_request_canceled" {
 				log.Printf("Canceled friend request from %s to %s", payload.FromID, payload.ToID)
 
-				hub.SendToUser(payload.FromID, map[string]any{
+				sender.SendToUser(payload.FromID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.ToID,
-					"status":  "none", // отправителю: "ничего нет"
+					"status":  "none", // for sender: no active request
 				})
 
-				hub.SendToUser(payload.ToID, map[string]any{
+				sender.SendToUser(payload.ToID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.FromID,
-					"status":  "none", // получателю: "ничего нет"
+					"status":  "none", // for receiver: no active request
 				})
 			}
 
 			if payload.Type == "friend_request_accepted" {
-				log.Printf("Friend request accepted: %s ↔ %s", payload.FromID, payload.ToID)
+				log.Printf("Friend request accepted: %s <-> %s", payload.FromID, payload.ToID)
 
-				hub.SendToUser(payload.FromID, map[string]any{
+				sender.SendToUser(payload.FromID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.ToID,
-					"status":  "friends", // для отправителя
+					"status":  "friends", // for sender
 				})
 
-				hub.SendToUser(payload.ToID, map[string]any{
+				sender.SendToUser(payload.ToID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.FromID,
-					"status":  "friends", // для получателя
+					"status":  "friends", // for receiver
 				})
 			}
 
 			if payload.Type == "friend_request_declined" {
-				log.Printf("Friend request declined: %s ❌ %s", payload.FromID, payload.ToID)
+				log.Printf("Friend request declined: %s %s", payload.FromID, payload.ToID)
 
-				hub.SendToUser(payload.FromID, map[string]any{
+				sender.SendToUser(payload.FromID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.ToID,
-					"status":  "none", // отправитель больше не видит
+					"status":  "none", // sender no longer sees the request
 				})
 
-				hub.SendToUser(payload.ToID, map[string]any{
+				sender.SendToUser(payload.ToID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.FromID,
-					"status":  "none", // получатель тоже ничего не видит
+					"status":  "none", // receiver no longer sees the request
 				})
 			}
 
 			if payload.Type == "friend_removed" {
-				log.Printf("Friend removed: %s ❌ %s", payload.FromID, payload.ToID)
+				log.Printf("Friend removed: %s %s", payload.FromID, payload.ToID)
 
-				hub.SendToUser(payload.FromID, map[string]any{
+				sender.SendToUser(payload.FromID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.ToID,
-					"status":  "none", // Удалившему: больше не друг
+					"status":  "none", // for the user who removed the friend
 				})
 
-				hub.SendToUser(payload.ToID, map[string]any{
+				sender.SendToUser(payload.ToID, map[string]any{
 					"type":    "friend_request_update",
 					"user_id": payload.FromID,
-					"status":  "none", // Удалённому: тоже больше не друг
+					"status":  "none", // for the removed user
 				})
 			}
 		}

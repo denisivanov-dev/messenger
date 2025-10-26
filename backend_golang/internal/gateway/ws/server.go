@@ -3,16 +3,18 @@ package ws
 import (
 	"log"
 	"net/http"
-	"sync"
 
 	rds "github.com/redis/go-redis/v9"
 
 	"messenger/backend_golang/internal/common"
-	"messenger/backend_golang/internal/online"
-	"messenger/backend_golang/internal/utils"
+	"messenger/backend_golang/internal/gateway/client"
+	"messenger/backend_golang/internal/gateway/hub"
+	"messenger/backend_golang/internal/gateway/types"
+	"messenger/backend_golang/internal/modules/online"
+	"messenger/backend_golang/internal/gateway/utils"
 )
 
-func ServeWS(hub *Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) {
+func ServeWS(h *hub.Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) {
 	conn, userID, username, err := utils.UpgradeAndAuth(w, r)
 	if err != nil {
 		return
@@ -25,36 +27,35 @@ func ServeWS(hub *Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	client := &Client{
-		Hub:      hub,
+	c := &client.Client{
+		Hub:      h,
 		Conn:     conn,
-		Send:     make(chan []byte, 256),
+		SendChan: make(chan []byte, 256),
 		UserID:   userID,
-		Username: username,
+		Name:     username,
 		RDB:      rdb,
 		Rooms:    make(map[string]struct{}, len(chatIDs)+1),
-		once:     sync.Once{},
 	}
 
 	// Register user in all their chat rooms
 	for _, id := range chatIDs {
-		client.Rooms[id] = struct{}{}
+		c.Rooms[id] = struct{}{}
 	}
 
 	// Also subscribe to the system room for global events like online/offline
-	client.Rooms[systemRoom] = struct{}{}
+	c.Rooms[types.SystemRoom] = struct{}{}
 
 	if err := online.SetOnline(r.Context(), rdb, userID); err != nil {
 		log.Printf("online.SetOnline: %v", err)
 	}
 
-	hub.Register <- client
+	h.RegisterClient(c)
 
-	hub.Broadcast <- RoomMessage{
-		RoomID: systemRoom,
+	h.BroadcastMessage(types.RoomMessage{
+		RoomID: types.SystemRoom,
 		Data:   online.BuildStatusMessage(userID, common.Online),
-	}
+	})
 
-	go client.WritePump()
-	go client.ReadPump()
+	go c.WritePump()
+	go c.ReadPump()
 }
