@@ -4,37 +4,43 @@ import (
 	"encoding/json"
 	"log"
 
+	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/gateway/types"
 )
 
-type HandlerFunc func(c types.ClientLike, raw json.RawMessage)
+type HandlerFunc func(c types.ClientLike, env common.Envelope)
 
 var registry = make(map[string]HandlerFunc)
 
-func Register(msgType string, fn HandlerFunc) {
-	if _, exists := registry[msgType]; exists {
-		log.Printf("[hub] handler already registered for type: %s", msgType)
+func Register(key string, fn HandlerFunc) {
+	if _, exists := registry[key]; exists {
+		log.Printf("[hub] handler already registered for key: %s", key)
 		return
 	}
-	registry[msgType] = fn
-	log.Printf("[hub] registered handler: %s", msgType)
+	registry[key] = fn
+	log.Printf("[hub] registered handler: %s", key)
 }
 
 func Handle(c types.ClientLike, raw []byte) {
-	var base struct {
-		Type string `json:"type"`
-	}
-
-	if err := json.Unmarshal(raw, &base); err != nil {
+	var env common.Envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
 		c.SendError("invalid JSON format")
 		return
 	}
 
-	handler, ok := registry[base.Type]
-	if !ok {
-		c.SendError("unsupported message type: " + base.Type)
+	if env.Kind == "" || env.Action == "" {
+		c.SendError("missing kind or action in envelope")
 		return
 	}
 
-	handler(c, json.RawMessage(raw))
+	// Key example: "message_send", "call_offer", "system_send"
+	key := env.Kind + "_" + env.Action
+
+	handler, ok := registry[key]
+	if !ok {
+		c.SendError("unsupported kind/action: " + key)
+		return
+	}
+
+	handler(c, env)
 }

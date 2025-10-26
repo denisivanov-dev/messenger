@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log"
 
 	"messenger/backend_golang/internal/common"
@@ -18,12 +17,7 @@ func RegisterInit() {
 
 // --- HANDLERS ---
 
-func handleInitGlobal(c types.ClientLike, raw json.RawMessage) {
-	var payload common.IncomingInitGlobal
-	if !gwutils.UnmarshalPayload(raw, &payload, c, "invalid init_global payload") {
-		return
-	}
-
+func handleInitGlobal(c types.ClientLike, env common.Envelope) {
 	roomID := "1" // system global chat room
 	c.LeaveAllExcept(types.SystemRoom, roomID)
 	c.JoinRoomIfNotJoined(roomID)
@@ -40,19 +34,14 @@ func handleInitGlobal(c types.ClientLike, raw json.RawMessage) {
 	log.Printf("[init_global] user %s joined room %s", c.ID(), roomID)
 }
 
-func handleInitPrivate(c types.ClientLike, raw json.RawMessage) {
-	var payload common.IncomingInitPrivate
-	if !gwutils.UnmarshalPayload(raw, &payload, c, "invalid init_private payload") {
-		return
-	}
-
+func handleInitPrivate(c types.ClientLike, env common.Envelope) {
 	rdb := gwutils.GetRedis(c)
 	if rdb == nil {
 		c.SendError("redis unavailable")
 		return
 	}
 
-	roomID, ok := chat.ResolveRoom(rdb, c.ID(), payload.ChatType, payload.ReceiverID)
+	roomID, ok := chat.ResolveRoom(rdb, c.ID(), env.ChatType, env.TargetID)
 	if !ok {
 		c.SendError("access denied or invalid chat")
 		return
@@ -64,5 +53,5 @@ func handleInitPrivate(c types.ClientLike, raw json.RawMessage) {
 	sendChan := gwutils.GetSendChan(c)
 	chat.SendHistory(rdb, roomID, sendChan, 50)
 
-	log.Printf("[init_private] user %s joined private room %s", c.ID(), roomID)
+	log.Printf("[init_private] user %s joined private room %s (target=%s)", c.ID(), roomID, env.TargetID)
 }
