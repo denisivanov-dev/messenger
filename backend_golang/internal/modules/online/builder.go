@@ -2,16 +2,25 @@ package online
 
 import (
 	"encoding/json"
+	"time"
 
 	"messenger/backend_golang/internal/common"
 )
-func BuildStatusMessage(userID string, status common.Status) []byte {
-	msg := common.StatusMessage{
-		Event:  "user_status",
-		UserID: userID,
-		Status: status,
-	}
-	b, _ := json.Marshal(msg)
 
-	return b
+func BuildStatusMessage(userID string, status string) []byte {
+	payload := common.OnlinePayload{
+		UserID: userID,
+		Status: status, // "online" | "offline" | "away"
+	}
+
+	env := common.Envelope{
+		Kind:      "event",
+		Action:    "user_status",
+		SenderID:  userID,
+		Timestamp: time.Now().UnixMilli(),
+		Payload:   payload,
+	}
+
+	data, _ := json.Marshal(env)
+	return data
 }

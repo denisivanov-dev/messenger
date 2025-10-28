@@ -11,22 +11,26 @@ import (
 )
 
 func RegisterInit() {
-	hub.Register("init_global", handleInitGlobal)
-	hub.Register("init_private", handleInitPrivate)
+	hub.Register("event_init_global", handleInitGlobal)
+	hub.Register("event_init_private", handleInitPrivate)
 }
 
 // --- HANDLERS ---
 
 func handleInitGlobal(c types.ClientLike, env common.Envelope) {
-	roomID := "1" // system global chat room
-	c.LeaveAllExcept(types.SystemRoom, roomID)
-	c.JoinRoomIfNotJoined(roomID)
-
 	rdb := gwutils.GetRedis(c)
 	if rdb == nil {
 		c.SendError("redis unavailable")
 		return
 	}
+	
+	roomID := env.ChatID
+	if roomID == "" {
+		roomID = "1"
+	}
+
+	c.LeaveAllExcept(types.SystemRoom, roomID)
+	c.JoinRoomIfNotJoined(roomID)
 
 	sendChan := gwutils.GetSendChan(c)
 	chat.SendHistory(rdb, roomID, sendChan, 50)

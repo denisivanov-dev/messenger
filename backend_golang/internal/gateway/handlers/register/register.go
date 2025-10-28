@@ -11,10 +11,10 @@ func RegisterAllModules() {
 
 	handlers.RegisterInit()     // init_global / init_private
 	handlers.RegisterChat()     // send_message / edit / delete / pin
-	handlers.RegisterTyping()   // typing events
-	handlers.RegisterCalls()    // start_call / join / leave / cancel / answer
-	handlers.RegisterWebRTC()   // webrtc_offer / answer / ice_candidate
-	handlers.RegisterMedia()    // camera / screen / mic status updates
+	// handlers.RegisterTyping()   // typing events
+	// handlers.RegisterCalls()    // start_call / join / leave / cancel / answer
+	// handlers.RegisterWebRTC()   // webrtc_offer / answer / ice_candidate
+	// handlers.RegisterMedia()    // camera / screen / mic status updates
 
 	log.Println("[register] all WebSocket modules registered successfully")
 }

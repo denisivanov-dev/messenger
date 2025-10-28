@@ -6,12 +6,11 @@ import (
 
 	rds "github.com/redis/go-redis/v9"
 
-	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/gateway/client"
 	"messenger/backend_golang/internal/gateway/hub"
 	"messenger/backend_golang/internal/gateway/types"
-	"messenger/backend_golang/internal/modules/online"
 	"messenger/backend_golang/internal/gateway/utils"
+	"messenger/backend_golang/internal/modules/online"
 )
 
 func ServeWS(h *hub.Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) {
@@ -45,17 +44,18 @@ func ServeWS(h *hub.Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request
 	// Also subscribe to the system room for global events like online/offline
 	c.Rooms[types.SystemRoom] = struct{}{}
 
-	if err := online.SetOnline(r.Context(), rdb, userID); err != nil {
-		log.Printf("online.SetOnline: %v", err)
+	// Update presence in Redis ===
+	if err := online.SetStatus(r.Context(), rdb, userID, "online"); err != nil {
+		log.Printf("[ws] SetStatus error: %v", err)
 	}
 
-	h.RegisterClient(c)
-
+	// Broadcast presence to all clients ===
 	h.BroadcastMessage(types.RoomMessage{
 		RoomID: types.SystemRoom,
-		Data:   online.BuildStatusMessage(userID, common.Online),
+		Data:   online.BuildStatusMessage(userID, "online"),
 	})
 
+	h.RegisterClient(c)
 	go c.WritePump()
 	go c.ReadPump()
 }

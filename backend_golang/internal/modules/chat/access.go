@@ -8,13 +8,14 @@ import (
 
 	rds "github.com/redis/go-redis/v9"
 	"messenger/backend_golang/internal/modules/utils"
+	"messenger/backend_golang/internal/modules/constants"
 )
 
 func GetRoomKey(userID, chatType, receiverID string) string {
 	if chatType == "private" {
 		return utils.GeneratePrivateChatKey(userID, receiverID)
 	}
-	return GlobalRoomID 
+	return constants.GlobalRoomID 
 }
 
 // ResolveRoom checks if the user has access to the chat.
@@ -23,7 +24,7 @@ func ResolveRoom(rdb *rds.Client, userID, chatType, receiverID string) (string, 
 
 	chatKey := GetRoomKey(userID, chatType, receiverID)
 
-	if chatKey == GlobalRoomID {
+	if chatKey == constants.GlobalRoomID {
 		return chatKey, true
 	}
 	

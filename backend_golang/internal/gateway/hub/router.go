@@ -28,6 +28,14 @@ func Handle(c types.ClientLike, raw []byte) {
 		return
 	}
 
+	// --- pretty debug log ---
+	if pretty, err := json.MarshalIndent(env, "", "  "); err == nil {
+		log.Printf("[gateway] received envelope:\n%s", string(pretty))
+	} else {
+		log.Printf("[gateway] raw message: %s", string(raw))
+	}
+	// -------------------------
+
 	if env.Kind == "" || env.Action == "" {
 		c.SendError("missing kind or action in envelope")
 		return

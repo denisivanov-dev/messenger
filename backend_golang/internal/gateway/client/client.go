@@ -9,7 +9,6 @@ import (
 	"github.com/gorilla/websocket"
 	rds "github.com/redis/go-redis/v9"
 
-	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/gateway/hub"
 	"messenger/backend_golang/internal/gateway/types"
 	"messenger/backend_golang/internal/modules/online"
@@ -130,12 +129,17 @@ func (c *Client) cleanup() {
 
 	log.Printf("[client %s] cleanup started", c.UserID)
 
+	// Notify all clients about status change (broadcast envelope)
+	statusMsg := online.BuildStatusMessage(c.UserID, "offline")
 	c.Hub.BroadcastMessage(types.RoomMessage{
 		RoomID: types.SystemRoom,
-		Data:   online.BuildStatusMessage(c.UserID, common.Offline),
+		Data:   statusMsg,
 	})
 
-	_ = online.SetOffline(context.Background(), c.RDB, c.UserID)
+	// Update Redis presence
+	ctx := context.Background()
+	_ = online.SetStatus(ctx, c.RDB, c.UserID, "offline")
+
 	c.Hub.UnregisterClient(c)
 	_ = c.Conn.Close()
 

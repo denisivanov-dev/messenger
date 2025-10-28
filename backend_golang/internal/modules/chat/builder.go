@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -9,65 +10,53 @@ import (
 	"messenger/backend_golang/internal/modules/utils"
 )
 
-func BuildMessage(in common.IncomingSendMessage, userID, username string) common.Envelope {
-	t := strings.TrimSpace(strings.ToLower(in.ChatType))
+func BuildMessage(env common.Envelope) common.Envelope {
+	t := strings.TrimSpace(strings.ToLower(env.ChatType))
+	chatID := utils.ResolveChatID(t, env.SenderID, env.TargetID)
 
-	var chatID string
-	switch t {
-	case "global":
-		chatID = GlobalRoomID
-	case "private":
-		chatID = utils.GeneratePrivateChatKey(userID, in.ReceiverID)
-	default:
-		chatID = GlobalRoomID
-	}
+	var payload common.MessagePayload
+	b, _ := json.Marshal(env.Payload)
+	_ = json.Unmarshal(b, &payload)
 
-	msg := common.MessagePayload{
-		MessageID:   uuid.NewString(),
-		Text:        in.Text,
-		ReplyTo:     in.ReplyTo,
-		ReplyToText: in.ReplyToText,
-		ReplyToUser: in.ReplyToUser,
-		Attachments: in.Attachments,
+	if payload.MessageID == "" {
+		payload.MessageID = uuid.NewString()
 	}
+	payload.EditedAt = 0
 
 	return common.Envelope{
 		Kind:      "message",
 		Action:    "send",
 		ChatID:    chatID,
 		ChatType:  t,
-		SenderID:  userID,
-		TargetID:  in.ReceiverID,
+		SenderID:  env.SenderID,
+		TargetID:  env.TargetID,
 		Timestamp: time.Now().UnixMilli(),
-		Payload:   msg,
+		Payload:   payload,
 	}
 }
 
-func BuildSystemMessage(action, chatType, fromUserID, toUserID string, callInfo *common.CallInfo) common.Envelope {
+func BuildSystemMessage(action, chatType, fromUserID, toUserID, text, context string) common.Envelope {
 	t := strings.TrimSpace(strings.ToLower(chatType))
+	chatID := utils.ResolveChatID(t, fromUserID, toUserID)
 
-	var chatID string
-	switch t {
-	case "global":
-		chatID = GlobalRoomID
-	case "private":
-		chatID = utils.GeneratePrivateChatKey(fromUserID, toUserID)
-	default:
-		chatID = GlobalRoomID
-	}
-
-	sysMsg := common.MessagePayload{
-		Text: "",
+	sysPayload := common.SystemPayload{
+		SystemID:  uuid.NewString(),
+		Text:      text,
+		Event:     action,
+		ActorID:   fromUserID,
+		TargetID:  toUserID,
+		Timestamp: time.Now().UnixMilli(),
+		Context:   context,
 	}
 
 	return common.Envelope{
 		Kind:      "system",
-		Action:    action, // "call_started", "call_ended", "user_joined"
+		Action:    action,
 		ChatID:    chatID,
 		ChatType:  t,
 		SenderID:  "0",
 		TargetID:  toUserID,
 		Timestamp: time.Now().UnixMilli(),
-		Payload:   sysMsg,
+		Payload:   sysPayload,
 	}
 }

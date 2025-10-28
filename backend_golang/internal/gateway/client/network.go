@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"messenger/backend_golang/internal/gateway/types"
+	"messenger/backend_golang/internal/common"
 )
 
 func (c *Client) BroadcastJSON(roomID string, payload any) {
@@ -23,10 +24,14 @@ func (c *Client) BroadcastJSON(roomID string, payload any) {
 func (c *Client) SendError(message string) {
 	log.Printf("[client %s] %s", c.UserID, message)
 
-	data, _ := json.Marshal(map[string]string{
-		"type":    "error",
-		"message": message,
-	})
+	env := common.Envelope{
+		Kind:   "system",
+		Action: "error",
+		Payload: map[string]string{
+			"message": message,
+		},
+	}
 
+	data, _ := json.Marshal(env)
 	c.Send(data)
 }

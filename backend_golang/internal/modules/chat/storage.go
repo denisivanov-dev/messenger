@@ -9,35 +9,36 @@ import (
 	"messenger/backend_golang/redis"
 )
 
-func SaveMessageToRedisHistory(rdb *rds.Client, roomID string, msg common.OutgoingMessage) {
+func SaveMessageToRedisHistory(rdb *rds.Client, roomID string, msg common.Envelope) {
 	msg.ChatID = roomID
-	NormalizeMessage(&msg, roomID)
 
 	historyKey := HistoryKey(roomID)
 	queueKey := QueueKey("to_save", roomID)
 
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("marshal error: %v", err)
+		log.Printf("[chat][SaveMessage] marshal error: %v", err)
 		return
 	}
 
 	redis.RPush(rdb, historyKey, data)
 	redis.LTrim(rdb, historyKey, -1000, -1)
+
+	// push to processing queue to save in DB (handled by Python workers)
 	redis.RPush(rdb, queueKey, data)
 }
 
-func LoadMessageHistory(rdb *rds.Client, chatID string, limit int64) ([]common.OutgoingMessage, error) {
+func LoadMessageHistory(rdb *rds.Client, chatID string, limit int64) ([]common.Envelope, error) {
 	vals, err := redis.LRange(rdb, HistoryKey(chatID), -limit, -1)
 	if err != nil {
 		return nil, err
 	}
 
-	msgs := make([]common.OutgoingMessage, 0, len(vals))
+	msgs := make([]common.Envelope, 0, len(vals))
 	for _, v := range vals {
-		var m common.OutgoingMessage
+		var m common.Envelope
 		if err := json.Unmarshal([]byte(v), &m); err != nil {
-			log.Printf("unmarshal: %v", err)
+			log.Printf("[chat][LoadMessage] unmarshal error: %v", err)
 			continue
 		}
 		msgs = append(msgs, m)

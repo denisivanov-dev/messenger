@@ -9,34 +9,37 @@ import (
 	"messenger/backend_golang/internal/modules/voice"
 )
 
-func HandleSendMessage(in common.IncomingSendMessage, userID, username string, rdb *redis.Client) (common.OutgoingMessage, bool) {
-	outMsg := BuildMessage(in, userID, username)
+func HandleSendMessage(env common.Envelope, rdb *redis.Client) (common.Envelope, bool) {
+	outMsg := BuildMessage(env) 
 
 	if outMsg.ChatID == "" {
-		log.Printf("empty ChatID in message, skipping: %+v", outMsg)
-		return common.OutgoingMessage{}, false
+		log.Printf("[chat] empty ChatID in message, skipping: %+v", outMsg)
+		return common.Envelope{}, false
 	}
 
 	go SaveMessageToRedisHistory(rdb, outMsg.ChatID, outMsg)
+
 	return outMsg, true
 }
 
-func HandleSystemMessage(msgType, chatType, fromUserID, toUserID string, callInfo *common.CallInfo, rdb *redis.Client) (common.OutgoingMessage, bool) {
-	outMsg := BuildSystemMessage(msgType, chatType, fromUserID, toUserID, callInfo)
+func HandleSystemMessage(action, chatType, fromUserID, toUserID, text, context string, rdb *redis.Client) (common.Envelope, bool) {
+	outMsg := BuildSystemMessage(action, chatType, fromUserID, toUserID, text, context)
+
 	if outMsg.ChatID == "" {
-		log.Printf("empty ChatID in system message, skipping: %+v", outMsg)
-		return common.OutgoingMessage{}, false
+		log.Printf("[chat] empty ChatID in system message, skipping: %+v", outMsg)
+		return common.Envelope{}, false
 	}
 
-	if msgType == "call_started" && callInfo != nil {
+	if action == "call_started" {
 		roomID := outMsg.ChatID
-		voice.SetOngoingCallMessageID(rdb, roomID, outMsg.MessageID)
-
-		if callInfo.StartedAt > 0 {
-			voice.SetCallStartTime(rdb, roomID, callInfo.StartedAt)
-		} else {
-			voice.SetCallStartTime(rdb, roomID, time.Now().Unix())
+		payload, ok := outMsg.Payload.(common.SystemPayload)
+		if !ok {
+			log.Printf("[chat] invalid system payload for call_started")
+			return outMsg, false
 		}
+
+		voice.SetOngoingCallMessageID(rdb, roomID, payload.SystemID)
+		voice.SetCallStartTime(rdb, roomID, time.Now().Unix())
 	}
 
 	go SaveMessageToRedisHistory(rdb, outMsg.ChatID, outMsg)
