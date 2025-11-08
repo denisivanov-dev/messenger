@@ -6,7 +6,7 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from './modules/auth/store/authStore'
-import { useChatStore } from './modules/chat/store/chatStore'
+import { useChatStore } from './modules/chat/features/chat/store/chatStore'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()

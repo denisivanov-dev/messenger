@@ -8,8 +8,8 @@ import LoginPage from './modules/auth/pages/loginPage.vue'
 import ForgotPasswordPage from './modules/auth/pages/forgotPasswordPage.vue' 
 import registerPage from './modules/auth/pages/registerPage.vue' 
 import confirmRegistrationPage from './modules/auth/pages/confirmRegistrationPage.vue' 
-import chatPage from './modules/chat/pages/chatPage.vue'
-import privateChatPage from './modules/chat/pages/privateChatPage.vue'
+import ChatPage from './modules/chat/features/chat/pages/chatPage.vue'
+import PrivateChatPage from './modules/chat/features/chat/pages/privateChatPage.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -17,8 +17,8 @@ const routes = [
   { path: '/forgot-password', component: ForgotPasswordPage },
   { path: '/register', component: registerPage},
   { path: '/confirm-registration', component: confirmRegistrationPage},
-  { path: '/global-chat', component: chatPage},
-  { path: '/private-chat', component: privateChatPage }
+  { path: '/global-chat', component: ChatPage},
+  { path: '/private-chat', component: PrivateChatPage }
 ]
 
 const router = createRouter({
