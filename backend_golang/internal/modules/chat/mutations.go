@@ -38,6 +38,7 @@ func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID, currentUs
 
 		_, _ = rdb.LRem(context.Background(), historyKey, 1, raw).Result()
 
+		// use envelope buidler instead
 		out := common.Envelope{
 			Kind:      "message",
 			Action:    "delete",

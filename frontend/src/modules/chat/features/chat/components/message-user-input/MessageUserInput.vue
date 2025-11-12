@@ -75,7 +75,7 @@
 <script setup>
 import { PaperclipIcon, XIcon } from 'lucide-vue-next'
 import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { useChatStore } from '../../../store/chatStore'
+import { useChatStore } from '../../store/chatStore'
 import { uploadAllImages } from '../../utils/messageUtils'
 
 const text = ref('')

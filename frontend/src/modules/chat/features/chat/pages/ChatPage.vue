@@ -24,11 +24,11 @@ import { onMounted, onBeforeUnmount, ref } from 'vue'
 import SideBarWindow from '../../AppSidebar/SideBarWindow.vue'
 import ChatWindow from '../components/chat-window/chatWindow.vue'
 import MessageUserInput from '../components/message-user-input/messageUserInput.vue'
-import UserListWindow from '../components/ui/userList/userListWindow.vue'
+import UserListWindow from '../components/user-list/userListWindow.vue'
 import { useChatStore } from '../store/chatStore'
-import { useAuthStore } from '../../auth/store/authStore'
+import { useAuthStore } from '../../../../auth/store/authStore'
 
-const authStore = useChatStore()
+const authStore = useAuthStore()
 const chatStore = useChatStore()
 
 const msgInputRef = ref(null)

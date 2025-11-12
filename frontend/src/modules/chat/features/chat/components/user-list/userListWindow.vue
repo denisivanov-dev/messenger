@@ -57,9 +57,9 @@
 <script setup>
 import { ref, computed, defineExpose } from 'vue'
 import { useRouter } from 'vue-router'
-import { useChatStore } from '../../../store/chatStore'
+import { useChatStore } from '../../store/chatStore'
 import { useAuthStore } from '../../../../../auth/store/authStore'
-import UserProfile from './userProfile.vue'
+import UserProfile from './UserProfile.vue'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()

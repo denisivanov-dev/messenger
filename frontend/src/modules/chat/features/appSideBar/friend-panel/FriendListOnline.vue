@@ -36,7 +36,7 @@
 import { computed } from 'vue'
 import { MessageSquareIcon } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
-import { useChatStore } from '../../../../store/chatStore'
+import { useChatStore } from '../../chat/store/chatStore'
 
 const router = useRouter()
 const chatStore = useChatStore()

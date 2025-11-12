@@ -1,7 +1,11 @@
 <template>
   <div
     ref="chatWindowRef"
-    class="chat-window w-full max-w-[1300px] p-5 bg-gray-100 rounded-2xl shadow-md overflow-y-scroll flex flex-col gap-2"
+    class="chat-window flex-1 min-h-0 w-full max-w-[1300px]
+           p-5 bg-[#232428] text-[#E4E6EB]
+           rounded-2xl shadow-[0_0_10px_rgba(0,0,0,0.3)]
+           overflow-y-auto flex flex-col gap-3
+           border border-[#2E2F33]"
   >
     <MessageItem
       v-for="msg in messages"
@@ -12,7 +16,17 @@
       @scroll-to-message="scrollToMessage"
     />
 
-    <div v-if="typingUser" class="text-sm italic text-gray-500 px-2 py-1">
+    <div
+      v-if="!messages.length"
+      class="flex-1 flex items-center justify-center text-[#9CA3AF] italic"
+    >
+      Пока тут пусто 👀
+    </div>
+
+    <div
+      v-if="typingUser"
+      class="text-sm italic text-[#A1A1AA] px-2 py-1"
+    >
       {{ typingUser }} печатает…
     </div>
   </div>
@@ -20,7 +34,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted  } from 'vue'
-import { useChatStore } from '../../../store/chatStore'
+import { useChatStore } from '../../store/chatStore'
 import MessageItem from './MessageItem.vue'
 import { waitForImagesAndThen } from '../../utils/chatWindowUtils'
 

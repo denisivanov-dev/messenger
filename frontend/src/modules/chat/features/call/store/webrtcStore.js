@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useMediaStore } from './mediaStore'
 import { useCallStore } from './callStore'
 import { useAuthStore } from '../../../../auth/store/authStore'
-import { sendSocketPayload } from '../../api/chatApi'
+import { sendSocketPayload } from '../../connection/ws/send'
 
 export const useWebRTCStore = defineStore('webrtc', () => {
   const authStore = useAuthStore()

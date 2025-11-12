@@ -40,7 +40,9 @@ func handleSendMessage(c types.ClientLike, env common.Envelope) {
 		return
 	}
 
-	outMsg, ok := chat.HandleSendMessage(env, rdb)
+	senderID := c.ID()
+	username := c.Username()
+	outMsg, ok := chat.HandleSendMessage(env, rdb, senderID, username)
 	if !ok {
 		return
 	}

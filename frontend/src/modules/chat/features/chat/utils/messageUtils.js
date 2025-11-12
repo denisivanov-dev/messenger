@@ -1,4 +1,4 @@
-import { uploadFileToR2 } from "../api/chatApi"
+import { uploadFileToR2 } from "../api/messagesApi"
 
 export async function uploadAllImages(files) {
     const MAX_FILES = 5

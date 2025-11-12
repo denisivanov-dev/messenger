@@ -10,25 +10,67 @@ import (
 	"messenger/backend_golang/internal/modules/utils"
 )
 
-func BuildMessage(env common.Envelope) common.Envelope {
+func BuildMessage(action, senderID, username string, env common.Envelope) common.Envelope {
 	t := strings.TrimSpace(strings.ToLower(env.ChatType))
-	chatID := utils.ResolveChatID(t, env.SenderID, env.TargetID)
+	chatID := utils.ResolveChatID(t, senderID, env.TargetID)
 
-	var payload common.MessagePayload
-	b, _ := json.Marshal(env.Payload)
-	_ = json.Unmarshal(b, &payload)
+	payload := common.MessagePayload{
+		Attachments: []common.Attachment{},
+		EditedAt:    0,
+		IsEdited:    false,
+		MessageID:   uuid.NewString(),
+		Pinned:      false,
+		ReplyTo:     nil,
+		ReplyToText: nil,
+		ReplyToUser: nil,
+		Text:        "",
+		Username:    username,
+	}
+
+	raw, _ := json.Marshal(env.Payload)
+	_ = json.Unmarshal(raw, &payload)
 
 	if payload.MessageID == "" {
 		payload.MessageID = uuid.NewString()
 	}
-	payload.EditedAt = 0
+	if payload.Username == "" {
+		payload.Username = username
+	}
+
+	switch action {
+	case "send":
+		payload.IsEdited = false
+		payload.EditedAt = 0
+
+	case "edit":
+		payload.IsEdited = true
+		payload.EditedAt = time.Now().UnixMilli()
+
+	case "delete":
+		payload = common.MessagePayload{
+			MessageID: payload.MessageID,
+			Username:  username,
+		}
+
+	case "pin":
+		payload.Pinned = true
+
+	case "unpin":
+		payload.Pinned = false
+
+	case "reply":
+		if payload.ReplyToUser == nil || *payload.ReplyToUser == "" {
+			u := senderID
+			payload.ReplyToUser = &u
+		}
+	}
 
 	return common.Envelope{
 		Kind:      "message",
-		Action:    "send",
+		Action:    action,
 		ChatID:    chatID,
 		ChatType:  t,
-		SenderID:  env.SenderID,
+		SenderID:  senderID,
 		TargetID:  env.TargetID,
 		Timestamp: time.Now().UnixMilli(),
 		Payload:   payload,

@@ -8,8 +8,8 @@ import LoginPage from './modules/auth/pages/loginPage.vue'
 import ForgotPasswordPage from './modules/auth/pages/forgotPasswordPage.vue' 
 import registerPage from './modules/auth/pages/registerPage.vue' 
 import confirmRegistrationPage from './modules/auth/pages/confirmRegistrationPage.vue' 
-import ChatPage from './modules/chat/features/chat/pages/chatPage.vue'
-import PrivateChatPage from './modules/chat/features/chat/pages/privateChatPage.vue'
+import ChatPage from './modules/chat/features/chat/pages/ChatPage.vue'
+import PrivateChatPage from './modules/chat/features/chat/pages/PrivateChatPage.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },

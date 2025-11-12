@@ -1,7 +1,9 @@
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime,
-    ForeignKey, Index, UniqueConstraint, CheckConstraint
+    ForeignKey, Index, UniqueConstraint, CheckConstraint, 
+    JSON, BigInteger, Float
 )
+import sqlalchemy as sa 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from backend_python.database import Base
@@ -41,27 +43,41 @@ class ChatParticipant(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id        = Column(String, primary_key=True)
-    chat_id   = Column(ForeignKey("chats.id",  ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(ForeignKey("users.id",  ondelete="SET NULL"), nullable=True, index=True)
+    id = Column(String, primary_key=True)
+    chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id = Column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    target_id = Column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    type = Column(String, nullable=False, default="text")
-    content    = Column(Text, nullable=False)
-    is_edited  = Column(Boolean, default=False)
-    deleted    = Column(Boolean, default=False)
-    is_pinned  = Column(Boolean, default=False)
+    kind = Column(String, nullable=False, default="message", server_default="message")
+    action = Column(String, nullable=False, default="send", server_default="send")
+    chat_type = Column(String, nullable=False, default="private", server_default="private")
+    timestamp = Column(BigInteger, nullable=True)
 
+    text = Column(Text, nullable=True)
+    attachments = Column(JSON, nullable=True)
+    attachments_db = relationship(
+        "Attachment",
+        back_populates="message",
+        cascade="all, delete-orphan"
+    )
     reply_to_id = Column(String, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
 
+    is_edited = Column(Boolean, default=False, server_default=sa.text("false"))
+    deleted = Column(Boolean, default=False, server_default=sa.text("false"))
+    is_pinned = Column(Boolean, default=False, server_default=sa.text("false"))
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    edited_at  = Column(DateTime(timezone=True), nullable=True)
+    edited_at = Column(DateTime(timezone=True), nullable=True)
+
+    raw_envelope = Column(JSON, nullable=True)
 
     __table_args__ = (
         Index("idx_messages_chat_created", "chat_id", "created_at"),
     )
 
-    chat   = relationship("Chat", back_populates="messages")
-    sender = relationship("User")
+    chat = relationship("Chat", back_populates="messages")
+    sender = relationship("User", foreign_keys=[sender_id])
+    target = relationship("User", foreign_keys=[target_id])
     reply_to = relationship("Message", remote_side=[id], post_update=True)
 
 class MessageEdit(Base):
@@ -80,14 +96,20 @@ class Attachment(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     message_id = Column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    filename   = Column(String, nullable=False)
-    filetype   = Column(String, nullable=False)  # image, video, audio, file
-    filesize   = Column(Integer, nullable=False)
+    key = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    size = Column(Integer, nullable=False)
+    mime = Column(String, nullable=True)
     original_name = Column(String, nullable=True)
+
+    # 🔹 Метаданные для мультимедиа
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    duration = Column(Float, nullable=True)
 
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    message = relationship("Message", backref="attachments")
+    message = relationship("Message", back_populates="attachments_db")
 
 class FriendLink(Base):
     __tablename__ = "friend_links"

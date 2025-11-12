@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { useChatStore } from '../chatStore'
-import { useAuthStore } from '../../../auth/store/authStore'
+import { useChatStore } from '../../chat/store/chatStore'
+import { useAuthStore } from '../../../../auth/store/authStore'
 import { useWebRTCStore } from './webrtcStore'
 import { useMediaStore } from './mediaStore'
-import { sendSocketPayload } from '../../api/chatApi'
+import { sendSocketPayload } from '../../connection/ws/send'
 
 export const useCallStore = defineStore('call', () => {
   const authStore = useAuthStore()

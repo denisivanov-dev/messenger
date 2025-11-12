@@ -6,11 +6,15 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from './modules/auth/store/authStore'
-import { useChatStore } from './modules/chat/features/chat/store/chatStore'
+import { useChatStore } from './modules/chat/features/chat/store/legacyChatStore'
+import { useChatModeStore } from './modules/chat/features/chat/store/chatModeStore'
+import { useConnectionStore } from './modules/chat/features/connection/store/connectionStore'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const chatMode = useChatModeStore()
+const connection = useConnectionStore()
 const router = useRouter()
 
 let refreshTimer = null
@@ -25,15 +29,14 @@ async function initAuthFlow () {
   const receiverId = localStorage.getItem('receiverId') || null
 
   if (mode === 'private' && receiverId) {
-    chatStore.setChatModePrivate(receiverId)
-    chatStore.startChat(token, 'private', receiverId)
+    chatMode.setChatModePrivate(receiverId)
   } else {
-    chatStore.setChatModeGlobal()
-    console.info('Global')
-    chatStore.startChat(token, 'global')
+    chatMode.setChatModeGlobal()
   }
 
-  chatStore.fetchUsers()
+  connection.startChat(token)
+
+  // chatStore.fetchUsers()
 
   const guestPages = ['/', '/login', '/register', '/forgot-password', '/confirm-registration']
   if (guestPages.includes(router.currentRoute.value.path)) {

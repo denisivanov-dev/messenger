@@ -106,63 +106,64 @@
   <!-- Обычное сообщение -->
   <div
     v-else
-    :id="`msg-${props.message.message_id}`"
-    class="relative group flex items-start gap-3 px-4 py-2 bg-white rounded-xl shadow hover:bg-gray-50 transition"
+    :id="`msg-${props.message.payload.message_id}`"
+    class="relative group flex items-start gap-3 px-4 py-3
+          bg-[#2B2D31] hover:bg-[#323439] transition-colors
+          rounded-xl shadow-sm border border-[#383A3F]"
   >
-    <!-- Аватарка -->
+    <!-- Аватар -->
     <img
       :src="avatarUrl"
-      class="w-8 h-8 rounded-full object-cover mt-0.5"
+      class="w-8 h-8 rounded-full object-cover mt-0.5 ring-1 ring-[#3A3B3F]"
       alt="аватар"
     />
 
-    <!-- Контейнер контента -->
-    <div class="flex-1 relative">
-      <!-- Индикатор "изменено" и дата -->
-      <div
-        v-if="props.message.edited_at"
-        class="absolute top-0 right-0 mt-1 mr-2 text-[10px] text-gray-400"
-      >
-        изменено • {{ formattedEditDate }}
-      </div>
+    <!-- Контент -->
+    <div class="flex-1 relative text-[#E4E6EB]">
+      <!-- Имя и время -->
+      <div class="flex items-center gap-2 mb-1">
+        <span class="font-semibold text-[#F2F3F5]">{{ props.message.payload.username }}</span>
+        <span class="text-xs text-[#9CA3AF]">{{ formattedDate }}</span>
 
-      <!-- Заголовок: имя и время -->
-      <div
-        class="mb-1 text-xs flex items-center gap-1"
-        :class="props.message.pinned ? 'text-purple-800 bg-purple-100 px-1 py-0.5 rounded' : 'text-gray-500'"
-      >
-        <span>{{ props.message.username }} • {{ formattedDate }}</span>
-        <span v-if="props.message.pinned" class="flex items-center gap-1 text-xs">
-          📌 <span class="italic m-auto">Закреплено</span>
+        <span
+          v-if="props.message.payload.pinned"
+          class="flex items-center gap-1 ml-2 text-xs text-[#C084FC]"
+        >
+          📌 <span class="italic">Закреплено</span>
         </span>
       </div>
 
-      <!-- Ответ на сообщение -->
+      <!-- Ответ -->
       <div
-        v-if="props.message.reply_to"
-        class="mb-1 text-[11px] text-gray-500 border-l-2 border-blue-400 pl-2 cursor-pointer hover:text-blue-600"
-        @click="$emit('scroll-to-message', props.message.reply_to)"
+        v-if="props.message.payload.reply_to"
+        class="text-[12px] text-[#9CA3AF] border-l-2 border-[#5865F2] pl-2 mb-1 cursor-pointer hover:text-[#A5B4FC]"
+        @click="$emit('scroll-to-message', props.message.payload.reply_to)"
       >
-        ↩ {{ props.message.reply_to_user }}:
-        <span class="italic text-gray-500">{{ repliedMessageText }}</span>
+        ↩ {{ props.message.payload.reply_to_user || 'неизвестный' }}:
+        <span class="italic opacity-75">{{ props.message.payload.reply_to_text }}</span>
       </div>
 
-      <!-- Атачменты (если есть) -->
+      <!-- Текст -->
+      <p v-if="props.message.payload.text" class="text-sm leading-relaxed whitespace-pre-wrap">
+        {{ props.message.payload.text }}
+      </p>
+
+      <!-- Атачменты -->
       <MessageGallery
-        v-if="props.message.attachments && props.message.attachments.some(att => att.type === 'image')"
-        :attachments="props.message.attachments.filter(att => att.type === 'image')"
+        v-if="props.message.payload.attachments && props.message.payload.attachments.length"
+        :attachments="props.message.payload.attachments"
         :imageUrls="attachmentUrls"
         :openImage="(key) => openImage(attachmentUrls[key])"
+        class="mt-2"
       />
-
-      <!-- Текст (если есть) -->
-      <p v-if="props.message.text" class="text-sm text-gray-900">{{ props.message.text }}</p>
 
       <!-- Ховер-меню -->
       <div
-        class="absolute top-0 right-0 mt-1 mr-1 hidden group-hover:flex flex-row bg-white border rounded shadow px-2 py-1 z-10 gap-2"
+        class="absolute top-0 right-0 mt-1 mr-1 hidden group-hover:flex flex-row
+              bg-[#202225]/90 backdrop-blur-sm border border-[#3A3B3E]
+              rounded-lg shadow-lg px-2 py-1 z-10 gap-2"
       >
-        <button @click="reply" title="Ответить" class="text-blue-600 hover:text-blue-800">
+        <button @click="reply" title="Ответить" class="text-[#60A5FA] hover:text-[#93C5FD]">
           <ReplyIcon class="w-4 h-4" />
         </button>
 
@@ -170,12 +171,12 @@
           v-if="isMyMessage"
           @click="edit"
           title="Редактировать"
-          class="text-yellow-600 hover:text-yellow-800"
+          class="text-[#FACC15] hover:text-[#FDE68A]"
         >
           <EditIcon class="w-4 h-4" />
         </button>
 
-        <button @click="pin" title="Закрепить" class="text-purple-600 hover:text-purple-800">
+        <button @click="pin" title="Закрепить" class="text-[#C084FC] hover:text-[#E9D5FF]">
           <PinIcon class="w-4 h-4" />
         </button>
 
@@ -183,13 +184,22 @@
           v-if="isMyMessage"
           @click="remove"
           title="Удалить"
-          class="text-red-600 hover:text-red-800"
+          class="text-[#F87171] hover:text-[#FCA5A5]"
         >
           <TrashIcon class="w-4 h-4" />
         </button>
       </div>
+
+      <!-- Изменено -->
+      <div
+        v-if="props.message.payload.is_edited"
+        class="text-[10px] text-[#9CA3AF] italic mt-1"
+      >
+        изменено • {{ formattedEditDate }}
+      </div>
     </div>
   </div>
+
 
   <!-- Модалка для увеличенного изображения -->
   <Teleport to="body">
@@ -238,10 +248,10 @@ import {
 } from 'lucide-vue-next'
 
 import { useAuthStore } from '../../../../../auth/store/authStore'
-import { useChatStore } from '../../../store/chatStore'
-import { useCallStore } from '../../../store/call/callStore'
+import { useChatStore } from '../../store/chatStore'
+import { useCallStore } from '../../../call/store/callStore'
 import { loadAttachmentUrls } from '../../utils/attachmentUtils'
-import MessageGallery from './messageGallery.vue'
+import MessageGallery from '../message-content/MessageGallery.vue'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()

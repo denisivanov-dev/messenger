@@ -337,10 +337,10 @@
 import { computed, ref, watchEffect, onMounted, onBeforeUnmount, watch} from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '../../../../auth/store/authStore'
-import { useChatStore } from '../../../store/chatStore'
-import { useCallStore } from '../../../store/call/callStore'
-import { useMediaStore } from '../../../store/call/mediaStore'
-import { useWebRTCStore } from '../../../store/call/webrtcStore'
+import { useChatStore } from '../../chat/store/chatStore'
+import { useCallStore } from '../store/callStore'
+import { useMediaStore } from '../store/mediaStore'
+import { useWebRTCStore } from '../store/webrtcStore'
 import { PhoneOff, UserCheck, Mic, MicOff, Video, VideoOff, Monitor, MonitorOff } from 'lucide-vue-next'
 
 const authStore = useAuthStore()

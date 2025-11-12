@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { sendMessage } from '../../api/chatApi'
+import { sendSocketPayload } from '../../../connection/ws/send'
 import { isTypingForCurrentRoom } from '../../utils/chatRoom'
 
 export const useTypingStore = defineStore('events', () => {
@@ -30,7 +30,7 @@ export const useTypingStore = defineStore('events', () => {
 
   function sendTyping(chatType, receiverId) {
     if (typingCooldown) return
-    sendMessage({
+    sendSocketPayload({
       type: 'typing',
       receiver_id: receiverId,
       text: '',

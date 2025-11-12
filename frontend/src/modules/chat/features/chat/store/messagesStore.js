@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { sendMessage, startPrivateChat } from '../api/chatApi'
+import { sendSocketPayload } from '../../connection/ws/send'
+import { startPrivateChat } from '../api/chatApi'
 import { isNearBottom } from '../utils/chatWindowUtils'
 
 export const useMessagesStore = defineStore('messages', () => {
@@ -18,17 +19,23 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
-  function pushFromWs(msg) {
+  function pushFromWs(env) {
     try {
-      if (
-        typeof msg !== 'object' ||
-        !msg.message_id ||
-        (!msg.text && msg.attachments?.length === 0)
-      ) return
+      if (typeof env !== 'object' || env.kind !== 'message') return
+
+      const msg = env.payload
+        ? { ...env.payload, chat_id: env.chat_id, sender_id: env.sender_id }
+        : env
+
+      if (!msg.message_id || (!msg.text && (!msg.attachments || msg.attachments.length === 0))) {
+        console.warn('[WS] invalid message ignored', msg)
+        return
+      }
       messages.value.push(msg)
     } catch (err) {
-      console.error('PUSH CRASH:', err, msg)
+      console.error('[WS] push crash:', err, env)
     }
+
     shouldScroll.value = isNearBottom()
   }
 
@@ -81,12 +88,15 @@ export const useMessagesStore = defineStore('messages', () => {
     }))
 
     const msg = {
-      type: 'send_message',
-      text: text.trim(),
-      attachments: safeAttachments,
-      timestamp: Date.now(),
+      kind: 'message',
+      action: 'send',
       chat_type: chatType,
-      receiver_id: receiverID,
+      target_id: receiverID,
+      timestamp: Date.now(),
+      payload: {
+        text: text.trim(),
+        attachments: safeAttachments, // [{type:'image', key:'xyz'}] и т. д.
+      }
     }
 
     if (replyToMessage) {
@@ -97,12 +107,12 @@ export const useMessagesStore = defineStore('messages', () => {
     const json = JSON.stringify(msg)
     console.log('📦 WS payload size:', json.length)
 
-    sendMessage(msg)
+    sendSocketPayload(msg)
     shouldScroll.value = true
   }
 
   function deleteMessage(message, chatType, receiverID) {
-    sendMessage({
+    sendSocketPayload({
       type: 'delete_message',
       message_id: message.message_id,
       receiver_id: receiverID,
@@ -111,7 +121,7 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   function editMessage(message, newText, chatType, receiverID) {
-    sendMessage({
+    sendSocketPayload({
       type: 'edit_message',
       message_id: message.message_id,
       new_text: newText,
@@ -121,7 +131,7 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   function pinMessage(message, shouldPin, chatType, receiverID) {
-    sendMessage({
+    sendSocketPayload({
       type: 'pin_message',
       message_id: message.message_id,
       chat_id: message.chat_id,

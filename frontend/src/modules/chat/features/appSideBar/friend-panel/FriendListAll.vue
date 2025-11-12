@@ -75,8 +75,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { MessageSquareIcon, TrashIcon } from 'lucide-vue-next'
-import { useChatStore } from '../../../../store/chatStore'
-import { useAuthStore } from '../../../../../auth/store/authStore'
+import { useChatStore } from '../../chat/store/chatStore'
+import { useAuthStore } from '../../../../auth/store/authStore'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()

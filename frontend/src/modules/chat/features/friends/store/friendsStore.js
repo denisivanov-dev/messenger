@@ -7,15 +7,16 @@ import {
   apiDeclineFriendRequest,
   apiDeleteFriend,
   apiGetFriends
-} from '../api/chatApi'
+} from '../api/friendsApi'
 import { eventBus } from '../../../shared/utils/eventBus'
 
 export const useFriendsStore = defineStore('friends', () => {
   const friendStatusCache = useStorage('friend-status-cache', {})
 
   function applyFriendRequestUpdate(msg) {
-    console.info('🔥 🔥 🔥 Friend request received:', msg)
+    console.info('[WS] Friend request update received:', msg)
     friendStatusCache.value[msg.user_id] = msg.status
+
     eventBus.emit('friend-update', msg)
     eventBus.emit('friend-panel-update', msg)
   }
@@ -23,33 +24,51 @@ export const useFriendsStore = defineStore('friends', () => {
   async function getFriends(userId) {
     const statusMap = await apiGetFriends(userId)
 
+    // Synchronizing the local cache with the server cache
     Object.keys(friendStatusCache.value).forEach(id => {
-      if (!(id in statusMap)) {
-        delete friendStatusCache.value[id]
-      }
+      if (!(id in statusMap)) delete friendStatusCache.value[id]
     })
 
     Object.entries(statusMap).forEach(([id, status]) => {
       friendStatusCache.value[id] = status
     })
-    console.info(statusMap)
+
+    console.info('[API] Friends fetched:', statusMap)
     return statusMap
   }
 
-  async function sendFriendRequest(fromId, toId) { return apiSendFriendRequest(fromId, toId) }
-  async function cancelFriendRequest(fromId, toId) { return apiCancelFriendRequest(fromId, toId) }
-  async function acceptFriendRequest(fromId, toId) { return apiAcceptFriendRequest(fromId, toId) }
-  async function declineFriendRequest(fromId, toId) { return apiDeclineFriendRequest(fromId, toId) }
-  async function deleteFriend(fromId, toId) { return apiDeleteFriend(fromId, toId) }
+  //* CRUD actions
+  async function sendFriendRequest(fromId, toId) {
+    return apiSendFriendRequest(fromId, toId)
+  }
+
+  async function cancelFriendRequest(fromId, toId) {
+    return apiCancelFriendRequest(fromId, toId)
+  }
+
+  async function acceptFriendRequest(fromId, toId) {
+    return apiAcceptFriendRequest(fromId, toId)
+  }
+
+  async function declineFriendRequest(fromId, toId) {
+    return apiDeclineFriendRequest(fromId, toId)
+  }
+
+  async function deleteFriend(fromId, toId) {
+    return apiDeleteFriend(fromId, toId)
+  }
 
   return {
+    // state
     friendStatusCache,
+
+    // actions
     applyFriendRequestUpdate,
     getFriends,
     sendFriendRequest,
     cancelFriendRequest,
     acceptFriendRequest,
     declineFriendRequest,
-    deleteFriend
+    deleteFriend,
   }
 })

@@ -9,8 +9,8 @@ import (
 	"messenger/backend_golang/internal/modules/voice"
 )
 
-func HandleSendMessage(env common.Envelope, rdb *redis.Client) (common.Envelope, bool) {
-	outMsg := BuildMessage(env) 
+func HandleSendMessage(env common.Envelope, rdb *redis.Client, senderID, username string) (common.Envelope, bool) {
+	outMsg := BuildMessage("send", senderID, username, env)
 
 	if outMsg.ChatID == "" {
 		log.Printf("[chat] empty ChatID in message, skipping: %+v", outMsg)

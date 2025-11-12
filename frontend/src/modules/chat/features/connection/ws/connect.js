@@ -1,8 +1,11 @@
+import { sendSocketPayload } from './send'
+import { useChatModeStore } from '../../chat/store/chatModeStore'
+
 let socket = null
 
-export function connect(token, onMessage, mode = 'global', receiverId = null) {
+export function connect(token, onMessage) {
   if (!token) {
-    console.error('WebSocket connection aborted: no token provided')
+    console.error('[WS] Connection aborted: no token provided')
     return
   }
 
@@ -13,37 +16,44 @@ export function connect(token, onMessage, mode = 'global', receiverId = null) {
   socket = new WebSocket(`ws://localhost:8080/ws?token=${token}`)
 
   socket.onopen = () => {
-    console.log('WebSocket connected')
+    console.log('[WS] Connected')
 
-    if (mode === 'global') {
-      socket.send(JSON.stringify({
-        type: 'init_global',
-        chat_type: 'global'
-      }))
-    } else if (mode === 'private' && receiverId) {
-      socket.send(JSON.stringify({
-        type: 'init_private',
-        chat_type: 'private',
-        receiver_id: receiverId
-      }))
+    const chatMode = useChatModeStore()
+
+    const payload = {
+      kind: 'event',
+      action: 'init_chat',
+      chat_type: chatMode.chatType, // 'global' | 'private'
+      target_id: chatMode.receiverID, // can be null
+      timestamp: Date.now(),
     }
+
+    sendSocketPayload(payload)
   }
 
   socket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
       onMessage?.(data)
-    } catch (e) {
-      console.error('[WS] Invalid message', event.data)
+    } catch (err) {
+      console.error('[WS] Invalid message:', event.data)
     }
   }
 
-  socket.onclose = () => console.warn('[WS] Disconnected')
-  socket.onerror = (err) => console.error('[WS] Error', err)
+  socket.onclose = (event) => {
+    console.warn(`[WS] Disconnected (${event.code}): ${event.reason || 'no reason'}`)
+  }
+
+  socket.onerror = (err) => {
+    console.error('[WS] Error:', err)
+  }
 }
 
 export function disconnect() {
-  if (socket) socket.close()
+  if (socket) {
+    socket.close(1000, 'Manual disconnect')
+    socket = null
+  }
 }
 
 export function getSocket() {

@@ -159,8 +159,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useAuthStore } from '../../../../../auth/store/authStore'
-import { useChatStore } from '../../../../store/chatStore'
+import { useAuthStore } from '../../../../auth/store/authStore'
+import { useChatStore } from '../../chat/store/chatStore'
 import { Check, X, Clock } from 'lucide-vue-next'
 
 const emit = defineEmits(['pending-count'])

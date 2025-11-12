@@ -24,12 +24,12 @@ import { nextTick, onMounted, ref, watch} from 'vue'
 import ChatWindow from '../components/chat-window/chatWindow.vue'
 import MessageUserInput from '../components/message-user-input/messageUserInput.vue'
 import ChatToolbar from '../components/chat-toolbar/chatToolbar.vue'
-import { useAuthStore } from '../../auth/store/authStore'
+import { useAuthStore } from '../../../../auth/store/authStore'
 import { useChatStore } from '../store/chatStore'
-import { useCallStore } from '../store/call/callStore'
+import { useCallStore } from '../../call/store/callStore'
 import { useRouter } from 'vue-router'
 import { getRoomId } from '../utils/chatRoom'
-import { getCallRoomStatus } from '../api/chatApi'
+import { getCallRoomStatus } from '../../call/api/voiceApi'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()

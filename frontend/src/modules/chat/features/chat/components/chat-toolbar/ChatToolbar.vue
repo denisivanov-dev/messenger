@@ -54,12 +54,12 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useChatStore } from '../../../store/chatStore'
-import { useCallStore } from '../../../store/call/callStore'
+import { useChatStore } from '../../store/chatStore'
+import { useCallStore } from '../../../call/store/callStore'
 import { useAuthStore } from '../../../../../auth/store/authStore'
 import { PhoneIcon } from 'lucide-vue-next'
-import IncomingCallModal from '../calls/IncomingCallModal.vue'
-import CallPanel from '../calls/callPanel.vue'
+import IncomingCallModal from '../../../call/components/IncomingCallModal.vue'
+import CallPanel from '../../../call/components/callPanel.vue'
 
 const chatStore = useChatStore()
 const callStore = useCallStore()

@@ -1,11 +1,25 @@
-export function handleMessageDeleted(msg, stores) {
-  stores.messagesStore.handleDeleted(msg.message_id)
-}
+export function handleMessageEvents(msg, stores) {
+  const { messagesStore } = stores
+  const payload = msg.payload || {}
 
-export function handleMessageEdited(msg, stores) {
-  stores.messagesStore.handleEdited(msg.message_id, msg.new_text, msg.edited_at)
-}
+  switch (msg.action) {
+    case 'send':
+      return messagesStore.pushFromWs(msg)
 
-export function handleMessagePinned(msg, stores) {
-  stores.messagesStore.handlePinned(msg.message_id, msg.action)
+    case 'edit':
+      return messagesStore.handleEdited(
+        payload.message_id,
+        payload.new_text,
+        payload.edited_at
+      )
+
+    case 'delete':
+      return messagesStore.handleDeleted(payload.message_id)
+
+    case 'pin':
+      return messagesStore.handlePinned(payload.message_id, payload.should_pin)
+
+    default:
+      console.warn('[WS] Unhandled message action:', msg.action)
+  }
 }

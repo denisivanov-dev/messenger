@@ -145,8 +145,8 @@ import {
   UserXIcon,
   UserCheckIcon
 } from 'lucide-vue-next'
-import { eventBus } from '../../../utils/eventBus'
-import { useChatStore } from '../../../store/chatStore'
+import { eventBus } from '../../../../shared/utils/eventBus'
+import { useChatStore } from '../../store/chatStore'
 
 const rootElement = ref(null)
 const cancelConfirmRef = ref(null)

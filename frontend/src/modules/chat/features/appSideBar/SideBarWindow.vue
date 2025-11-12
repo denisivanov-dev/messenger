@@ -46,8 +46,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import DraggableFriendPanel from './friendPanel/draggableFriendPanel.vue.vue'
-import FriendListPending from './friendPanel/FriendListPending.vue'
+import DraggableFriendPanel from './friend-panel/DraggableFriendPanel.vue'
+import FriendListPending from './friend-panel/FriendListPending.vue'
 
 const showFriendPanel = ref(false)
 const friendPanelPosition = ref({ top: 30, left: 300 })
