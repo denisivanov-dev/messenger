@@ -17,11 +17,12 @@
 
     <!-- Контейнер инпута -->
     <div
-      class="relative flex items-center w-full h-[60px] rounded-2xl border border-gray-300 shadow-md bg-white px-4 focus-within:ring-2 focus-within:ring-blue-500 transition"
+      class="relative flex items-center w-full h-[60px]
+            chat-input chat-input-focus chat-input-drag"
       @dragover.prevent="onDragOver"
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDrop"
-      :class="{ 'ring-2 ring-blue-400 bg-blue-50': isDragging }"
+      :class="{ 'dark-panel-drag': isDragging }"
     >
       <!-- Превью выбранных файлов -->
       <div
@@ -52,8 +53,9 @@
         @keyup.enter="send"
         @keyup.esc="onEsc"
         type="text"
-        placeholder="Type a message..."
-        class="flex-1 h-full border-none outline-none bg-transparent"
+        spellcheck="false"
+        placeholder="Введите сообщение..."
+        class="flex-1 h-full ml-3 border-none outline-none bg-transparent" 
       />
 
       <!-- Выбор файлов -->

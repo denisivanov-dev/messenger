@@ -1,0 +1,14 @@
+@import './theme.css';
+@import "./ui/chat-window.css";
+@import "./ui/chat-input.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background: var(--bg-1);
+  color: var(--text-1);
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}

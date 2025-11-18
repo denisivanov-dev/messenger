@@ -1,11 +1,9 @@
 <template>
   <div
     ref="chatWindowRef"
-    class="chat-window flex-1 min-h-0 w-full max-w-[1300px]
-           p-5 bg-[#232428] text-[#E4E6EB]
-           rounded-2xl shadow-[0_0_10px_rgba(0,0,0,0.3)]
-           overflow-y-auto flex flex-col gap-3
-           border border-[#2E2F33]"
+    class="flex-1 min-h-0 w-full max-w-[1300px]
+          p-6 overflow-y-auto flex flex-col gap-4 relative
+          chat-window"
   >
     <MessageItem
       v-for="msg in messages"
@@ -16,12 +14,19 @@
       @scroll-to-message="scrollToMessage"
     />
 
-    <div
-      v-if="!messages.length"
-      class="flex-1 flex items-center justify-center text-[#9CA3AF] italic"
-    >
-      Пока тут пусто 👀
-    </div>
+  <div
+    v-if="!messages.length"
+    class="flex-1 flex flex-col items-center justify-center text-[#9CA3AF] gap-6 py-8 select-none"
+  >
+    <div class="text-xl font-medium">Тут пока пусто...</div>
+
+    <img
+      src="/images/pythonus/lonely_pythonus.png"
+      alt="empty"
+      class="w-80 h-auto opacity-80 pointer-events-none select-none"
+      draggable="false"
+    />
+  </div>
 
     <div
       v-if="typingUser"
@@ -35,7 +40,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted  } from 'vue'
 import { useChatStore } from '../../store/chatStore'
-import MessageItem from './MessageItem.vue'
+import MessageItem from './message-item/MessageItem.vue'
 import { waitForImagesAndThen } from '../../utils/chatWindowUtils'
 
 const chatWindowRef = ref(null)

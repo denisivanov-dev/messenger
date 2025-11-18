@@ -247,11 +247,11 @@ import {
   PhoneCallIcon
 } from 'lucide-vue-next'
 
-import { useAuthStore } from '../../../../../auth/store/authStore'
-import { useChatStore } from '../../store/chatStore'
-import { useCallStore } from '../../../call/store/callStore'
-import { loadAttachmentUrls } from '../../utils/attachmentUtils'
-import MessageGallery from '../message-content/MessageGallery.vue'
+import { useAuthStore } from '../../../../../../auth/store/authStore'
+import { useChatStore } from '../../../store/chatStore'
+import { useCallStore } from '../../../../call/store/callStore'
+import { loadAttachmentUrls } from '../../../utils/attachmentUtils'
+import MessageGallery from '../../message-content/MessageGallery.vue'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()

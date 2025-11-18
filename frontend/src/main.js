@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import App from './app.vue'
 import { createRouter, createWebHistory } from 'vue-router'
-import './style.css'
+import '@/styles/index.css'
 import { createPinia } from 'pinia'
 
 import LoginPage from './modules/auth/pages/loginPage.vue'

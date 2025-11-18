@@ -1,0 +1,35 @@
+.chat-window {
+  @apply rounded-2xl border-2 border-solid text-white transition relative overflow-hidden;
+
+  border-color: #1d2738;
+
+  box-shadow:
+    0 20px 35px rgba(0,0,0,0.60),
+    inset 0 -10px 20px rgba(255,255,255,0.03),
+    inset 0 6px 16px rgba(255,255,255,0.02),
+    inset 0 0 50px rgba(0,0,0,0.55);
+
+  background: radial-gradient(
+      circle at 50% 0%,
+      rgba(55, 60, 75, 0.20) 0%,
+      rgba(28, 30, 38, 0.80) 35%,
+      rgba(20, 20, 26, 1) 100%
+  ),
+  linear-gradient(
+      180deg,
+      rgba(48,48,56,1) 0%,
+      rgba(32,32,40,1) 40%,
+      rgba(20,20,26,1) 100%
+  );
+}
+
+.chat-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.025;
+
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAIUlEQVQoU2NkYGD4z0AEYBxVSFcwCkYGhgEjmAQMYhEAAOmyB8x2oyAtAAAAAElFTkSuQmCC');
+  mix-blend-mode: overlay;
+}

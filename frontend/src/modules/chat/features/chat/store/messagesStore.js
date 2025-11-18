@@ -31,7 +31,7 @@ export const useMessagesStore = defineStore('messages', () => {
         console.warn('[WS] invalid message ignored', msg)
         return
       }
-      messages.value.push(msg)
+      messages.value.push(env)
     } catch (err) {
       console.error('[WS] push crash:', err, env)
     }
