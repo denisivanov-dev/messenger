@@ -1,12 +1,11 @@
 <template>
   <div
     ref="chatWindowRef"
-    class="flex-1 min-h-0 w-full max-w-[1300px]
-          p-6 overflow-y-auto flex flex-col gap-4 relative
-          chat-window"
+    class="flex-1 overflow-y-auto flex flex-col relative py-2 min-h-0 px-2 sm:px-3"
   >
+
     <MessageItem
-      v-for="msg in messages"
+      v-for="msg in messagesWithGroup"
       :key="msg.message_id"
       :message="msg"
       @edit-message="emit('edit-message', $event)"
@@ -89,5 +88,30 @@ onMounted(async () => {
   if (chatWindowRef.value) {
     chatWindowRef.value.scrollTop = chatWindowRef.value.scrollHeight
   }
+})
+
+const rawMessages = computed(() => chatStore.messages)
+
+const messagesWithGroup = computed(() => {
+  let lastSender = null
+  let groupIndex = 0
+
+  return rawMessages.value.map((m, index) => {
+    if (m.sender_id === lastSender) {
+      groupIndex++
+    } else {
+      lastSender = m.sender_id
+      groupIndex = 0
+    }
+
+    const nextMsg = rawMessages.value[index + 1]
+    const isLast = !nextMsg || nextMsg.sender_id !== m.sender_id
+
+    return {
+      ...m,
+      groupIndex,
+      isLastFromSender: isLast
+    }
+  })
 })
 </script>

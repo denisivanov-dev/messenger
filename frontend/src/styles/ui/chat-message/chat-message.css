@@ -1,0 +1,92 @@
+.message-user {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  transition: background-color .12s ease;
+  margin-bottom: 2px;
+}
+
+.message-user.group-end {
+  margin-bottom: 10px;
+}
+
+.bubble {
+  padding: 10px 12px;
+  max-width: 95%;
+  display: inline-block;
+  color: white;
+  line-height: 1.4;
+  position: relative;
+
+  word-break: break-word;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+
+  background: var(--bubble-bg);
+  transition: background-color .12s ease;
+}
+
+
+/* BUBBLE SHAPE */
+
+.bubble--solo {
+  border-radius: 18px;
+}
+
+.bubble--first {
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 18px;
+}
+
+.bubble--middle {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 18px;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 18px;
+}
+
+.bubble--last {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 18px;
+  border-bottom-left-radius: 0px;
+  border-bottom-right-radius: 18px;
+}
+
+
+.message-user.my .bubble {
+  --bubble-bg: #1a3d5c;
+}
+
+.message-user:not(.my) .bubble {
+  --bubble-bg: #2b2d31;
+}
+
+.message-user .bubble:hover {
+  --bubble-bg-hover: color-mix(in srgb, var(--bubble-bg) 90%, white);
+  background-color: var(--bubble-bg-hover);
+}
+
+.message-user .bubble:hover::after {
+  background: var(--bubble-bg-hover);
+}
+
+/* BUBBLE MESSAGE TAIL */
+.bubble--last::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  bottom: 0;
+  width: 10px;
+  height: 17px;
+  background: var(--bubble-bg);
+
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 17'><path d='M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z' fill='white'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 17'><path d='M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z' fill='white'/></svg>") no-repeat center / contain;
+}
+
+
+.msg-bubble:hover + .msg-actions {
+  opacity: 1;
+}

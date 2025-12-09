@@ -210,8 +210,11 @@ function onEsc() {
 }
 
 function focusInputOnKeyPress(event) {
+  if (event.ctrlKey) return
+
   const tag = document.activeElement.tagName.toLowerCase()
   const isTypingElement = ['input', 'textarea'].includes(tag)
+
   if (!isTypingElement && inputRef.value) {
     inputRef.value.focus()
   }

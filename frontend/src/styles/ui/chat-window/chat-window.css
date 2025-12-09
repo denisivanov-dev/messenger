@@ -1,0 +1,39 @@
+.chat-window {
+  @apply rounded-2xl border-2 border-solid text-white transition relative overflow-hidden;
+
+  border-color: #1a1c22;
+
+  box-shadow:
+    0 16px 28px rgba(0,0,0,0.55),
+    inset 0 -4px 12px rgba(255,255,255,0.02),
+    inset 0 2px 8px rgba(255,255,255,0.015),
+    inset 0 0 40px rgba(0,0,0,0.6);
+
+  background:
+    /* мягкий верхний блик */
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(65, 70, 85, 0.12) 0%,
+      rgba(30, 32, 40, 0.7) 38%,
+      rgba(20, 20, 26, 1) 100%
+    ),
+
+    /* основной градиент */
+    linear-gradient(
+      180deg,
+      rgba(40,40,48,1) 0%,
+      rgba(28,28,34,1) 40%,
+      rgba(17,17,22,1) 100%
+    );
+}
+
+.chat-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.015; /* тише, мягче */
+
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAIUlEQVQoU2NkYGD4z0AEYBxVSFcwCkYGhgEjmAQMYhEAAOmyB8x2oyAtAAAAAElFTkSuQmCC');
+  mix-blend-mode: overlay;
+}

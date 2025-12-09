@@ -34,8 +34,10 @@ async def validate_session(
         raise HTTPException(status_code=401, detail="Недействительная сессия")
 
     ua, ip = request.headers.get("user-agent", "unknown"), request.client.host
-    if session.user_agent != ua or session.ip_address != ip:
+    if session.ip_address != ip:
         raise HTTPException(status_code=401, detail="session_mismatch")
+    # session.user_agent != ua or !!! TO-DO: 
+    # FIND FIX CAUSE DEVTOOLS REFRESH MAKES NEW USER AGENT
 
     user = await get_user_by_user_id(db, session.user_id)
     return refresh_token, session, user
