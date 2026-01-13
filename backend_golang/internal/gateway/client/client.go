@@ -131,10 +131,7 @@ func (c *Client) cleanup() {
 
 	// Notify all clients about status change (broadcast envelope)
 	statusMsg := online.BuildStatusMessage(c.UserID, "offline")
-	c.Hub.BroadcastMessage(types.RoomMessage{
-		RoomID: types.SystemRoom,
-		Data:   statusMsg,
-	})
+	c.BroadcastJSON(types.SystemRoom, statusMsg)
 
 	// Update Redis presence
 	ctx := context.Background()

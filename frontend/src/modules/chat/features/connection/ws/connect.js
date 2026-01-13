@@ -36,6 +36,7 @@ export function connect(token, onMessage) {
       const data = JSON.parse(event.data)
       onMessage?.(data)
     } catch (err) {
+      console.error('[WS] Parsing error:', err.message);
       console.error('[WS] Invalid message:', event.data)
     }
   }

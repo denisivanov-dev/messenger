@@ -1,0 +1,103 @@
+.message-click_actions_item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: #E5E7EB;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.message-click_actions_item:hover {
+  background: #2A2B2F;
+}
+
+.message-click_actions_item--danger {
+  color: #F87171;
+}
+
+.message-click_actions_item--danger:hover {
+  background: #3A2323;
+}
+
+.message-click_actions_icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+
+.message-click_actions_divider {
+  margin: 4px 0;
+  height: 1px;
+  background: #3A3B3E;
+}
+
+.click-menu-enter-from,
+.click-menu-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+.click-menu-enter-active,
+.click-menu-leave-active {
+  transition:
+    opacity 120ms cubic-bezier(0.2, 0, 0, 1),
+    transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.click-menu-enter-to,
+.click-menu-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+
+
+.hover-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #E5E7EB;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.hover-menu-btn:hover {
+  color: #FFFFFF;
+}
+
+.hover-menu-btn--danger {
+  color: #F87171;
+}
+
+.hover-menu-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 9999;
+  padding: 2px 6px;
+  font-size: 10px;
+  color: #F9FAFB;
+  background: rgba(31, 41, 55, 1);
+  border-radius: 4px;
+  pointer-events: none;
+
+  transform: translate(-50%, -4px);
+  opacity: 0;
+
+  animation: tooltip-in 120ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+@keyframes tooltip-in {
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

@@ -6,16 +6,15 @@
       my: isMyMessage,
       'group-end': message.isLastFromSender
     }"
-  >
+  > 
+    <div class="flex items-end gap-3 px-1 w-full">
 
-    <div class="flex items-end gap-3 px-1 w-full group">
-
-      <!-- Аватар -->
+      <!-- user profile pic -->
       <template v-if="message.isLastFromSender">
         <img
           :src="avatarUrl"
           :style="avatarStyle"
-          class="rounded-full object-cover mt-0.5 ring-1 ring-[#3A3B3F]"
+          class="rounded-full object-cover mt-0.5 ring-1 ring-[#3A3B3F] select-none"
         />
       </template>
 
@@ -23,27 +22,57 @@
         <div :style="avatarSpacerStyle"></div>
       </template>
 
-      <!-- САМ ПУЗЫРЬ — БЕЗ ВРАПЕРОВ -->
-      <MessageContent
-        ref="bubble"
-        class="msg-bubble"
-        :message="message"
-        :attachmentUrls="attachmentUrls"
-        :isFirst="isFirst"
-        :zoom="zoom"
-        @open-image="openImage"
-        @scroll-to-message="$emit('scroll-to-message', $event)"
-      />
+      <!-- message wrapper for content and actions -->
+      <div
+        class="relative flex items-start w-fit"
+        @mouseenter="onHoverStart"
+        @mouseleave="onHoverEnd"
+        @contextmenu.prevent="openClickMenu"
+      >
+        <MessageContent
+          ref="bubble"
+          class="msg-bubble"
+          :message="message"
+          :attachmentUrls="attachmentUrls"
+          :isFirstMessage="isFirstMessage"
+          :zoom="zoom"
+          @open-image="openImage"
+          @scroll-to-message="$emit('scroll-to-message', $event)"
+        />
 
-      <MessageActions
-        class="msg-actions absolute opacity-0 transition -right-2 mt-[-4px]"
-        :isMy="isMyMessage"
-        @reply="reply"
-        @edit="edit"
-        @pin="pin"
-        @delete="remove"
-      />
+        <MessageHoverActions
+          class="message-user-actions absolute top-[-14px] right-4 translate-x-full transition-all"
+          :class="hoverMenu
+            ? 'pointer-events-auto'
+            : 'pointer-events-none'"
+          :isMy="isMyMessage"
+          @reply="reply"
+          @edit="edit"
+          @pin="pin"
+          @delete="remove"
+        />
+      </div>
     </div>
+
+    <!-- actions when user clicks on message -->
+    <Teleport to="body">
+      <Transition name="click-menu">
+        <MessageClickActions
+          v-if="clickMenu.open"
+          :x="clickMenu.x"
+          :y="clickMenu.y"
+          :openUp="clickMenu.openUp"
+          :isMy="isMyMessage"
+          @reply="() => { reply(); closeClickMenu() }"
+          @edit="() => { edit(); closeClickMenu() }"
+          @pin="() => { pin(); closeClickMenu() }"
+          @copy="() => { copyMessage(message.payload.text); closeClickMenu() }"
+          @forward="() => { forward(); closeClickMenu() }"
+          @delete="() => { remove(); closeClickMenu() }"
+          @select="() => { selectMessage(); closeClickMenu() }"
+        />
+      </Transition>
+    </Teleport>
 
     <!-- fullscreen image -->
     <Teleport to="body">
@@ -69,12 +98,14 @@
 
 <script setup>
 import { ref, computed, watch, inject } from 'vue'
+import { useClipboard } from '@vueuse/core'
 import { useAuthStore } from '../../../../../../../auth/store/authStore'
 import { useChatStore } from '../../../../store/chatStore'
 import { loadAttachmentUrls } from '../../../../utils/attachmentUtils'
 
 import MessageContent from '../message-parts/MessageContent.vue'
-import MessageActions from '../message-parts/MessageActions.vue'
+import MessageHoverActions from '../message-parts/MessageHoverActions.vue'
+import MessageClickActions from '../message-parts/MessageClickActions.vue'
 
 const props = defineProps({
   message: { type: Object, required: true }
@@ -89,13 +120,10 @@ const emit = defineEmits([
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
-/* ZOOM */
-const zoom = inject("zoom")
+const zoom = inject('zoom')
 
-/* FIRST IN GROUP */
-const isFirst = computed(() => props.message.groupIndex === 0)
+const isFirstMessage = computed(() => props.message.groupIndex === 0)
 
-/* USER / AVATAR */
 const avatarUrl = computed(() => {
   const u = chatStore.users[String(props.message.user_id)]
   return u?.avatar_url || '/default-avatar.png'
@@ -105,7 +133,7 @@ const isMyMessage = computed(() =>
   props.message.sender_id == authStore.getUserId
 )
 
-/* ZOOM STYLES */
+/* avatar scaling */
 const avatarStyle = computed(() => ({
   width: `${32 * zoom.value}px`,
   height: `${32 * zoom.value}px`,
@@ -116,8 +144,8 @@ const avatarSpacerStyle = computed(() => ({
   height: `${32 * zoom.value}px`,
 }))
 
-/* ATTACHMENTS */
 const attachmentUrls = ref({})
+
 watch(
   () => props.message.payload?.attachments,
   () => {
@@ -130,14 +158,94 @@ watch(
   { immediate: true }
 )
 
-/* IMAGE MODAL */
+/* fullscreen image */
 const fullscreenImageUrl = ref(null)
-function openImage(url) { fullscreenImageUrl.value = url }
-function closeImage() { fullscreenImageUrl.value = null }
 
-/* ACTIONS */
-function reply() { emit('reply-to-message', props.message) }
-function edit() { emit('edit-message', props.message) }
-function pin() { chatStore.pinMessage(props.message, !props.message.pinned) }
-function remove() { chatStore.deleteMessage(props.message) }
+function openImage(url) {
+  fullscreenImageUrl.value = url
+}
+
+function closeImage() {
+  fullscreenImageUrl.value = null
+}
+
+/* message actions */
+function reply() {
+  emit('reply-to-message', props.message)
+}
+
+function edit() {
+  emit('edit-message', props.message)
+}
+
+function pin() {
+  chatStore.pinMessage(props.message, !props.message.pinned)
+}
+
+function remove() {
+  chatStore.deleteMessage(props.message)
+}
+
+/* hover actions */
+const hoverMenu = ref(false)
+let hoverTimer = null
+let hideTimer = null
+
+const isAnyClickMenuOpen = inject('isAnyClickMenuOpen', ref(false))
+
+function onHoverStart() {
+  if (isAnyClickMenuOpen.value) return
+  clearTimeout(hideTimer)
+
+  hoverTimer = setTimeout(() => {
+    hoverMenu.value = true
+  }, 300)
+}
+
+function onHoverEnd() {
+  if (isAnyClickMenuOpen.value) return
+  clearTimeout(hoverTimer)
+
+  hideTimer = setTimeout(() => {
+    hoverMenu.value = false
+  }, 300)
+}
+
+/* click menu */
+const clickMenu = ref({ open: false, x: 0, y: 0 })
+const registerClickMenu = inject('registerClickMenu')
+
+function openClickMenu(e) {
+  registerClickMenu?.(closeClickMenu)
+
+  clearTimeout(hoverTimer)
+  clearTimeout(hideTimer)
+  hoverMenu.value = false
+
+  const MENU_HEIGHT = 290
+  const OFFSET = 10
+
+  const spaceBelow = window.innerHeight - e.clientY
+  const openUp = spaceBelow < MENU_HEIGHT + OFFSET
+
+  clickMenu.value = {
+    open: true,
+    x: e.clientX + 10,
+    y: e.clientY + OFFSET,
+    openUp
+  }
+}
+
+function closeClickMenu() {
+  clickMenu.value.open = false
+}
+
+/* clipboard */
+const { copy, isSupported } = useClipboard()
+
+const copyMessage = (text) => {
+  if (!isSupported.value) return
+  copy(text)
+  closeClickMenu()
+}
 </script>

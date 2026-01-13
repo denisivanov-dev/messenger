@@ -1,7 +1,7 @@
 import { nextTick } from 'vue'
 
 function getChatContainer () {
-  return document.querySelector('.chat-window')
+  return document.getElementById("chat-window")
 }
 
 /**

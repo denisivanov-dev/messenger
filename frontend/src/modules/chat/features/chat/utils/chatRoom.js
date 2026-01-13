@@ -8,9 +8,9 @@ export function getRoomId(chatType, myId, receiverId) {
 }
 
 export function isTypingForCurrentRoom(msg, chatType, myId, receiverId) {
-  if (msg.type !== 'typing') return false
-  if (String(msg.user_id) === String(myId)) return false
-
+  if (msg.action !== 'typing') return false
+  
+  if (String(msg.sender_id) === String(myId)) return false
   const current = getRoomId(chatType, myId, receiverId)
   if (!msg.chat_id) return false
   

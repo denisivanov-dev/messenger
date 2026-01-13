@@ -1,6 +1,6 @@
 export function handleTyping(msg, stores) {
-  const { eventsStore, chatType, receiverID, myId } = stores
-  eventsStore.handleTypingWs(msg, chatType.value, myId, receiverID.value)
+  const { typingStore, chatType, receiverID, myId } = stores
+  typingStore.handleTypingWs(msg, chatType, myId, receiverID)
 }
 
 export function handleUserStatus(msg, stores) {

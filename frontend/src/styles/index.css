@@ -1,7 +1,9 @@
 @import './theme.css';
 @import "./ui/chat-window/chat-window.css";
 @import "./ui/chat-input/chat-input.css";
+@import "./ui/chat-input/chat-context-menu.css";
 @import "./ui/chat-message/chat-message.css";
+@import "./ui/chat-message/message-actions.css";
 @import "./globals/scrollbar.css";
 @tailwind base;
 @tailwind components;

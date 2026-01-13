@@ -58,4 +58,36 @@ onMounted(initAuthFlow)
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
 })
+
+function onGlobalClick(e) {
+  const insideMenu = e.target.closest('.message-click_actions')
+  if (insideMenu) return
+
+  window.__closeActiveClickMenu?.()
+  
+}
+
+function onGlobalKeydown(e) {
+  if (e.key === 'Escape') {
+    window.__closeActiveClickMenu?.()
+    window.__cancelChatContext?.()
+    return
+  }
+
+  if (!window.__closeActiveClickMenu) return
+
+  if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Enter') {
+    window.__closeActiveClickMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onGlobalClick)
+  document.addEventListener('keydown', onGlobalKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onGlobalClick)
+  document.removeEventListener('keydown', onGlobalKeydown)
+})
 </script>

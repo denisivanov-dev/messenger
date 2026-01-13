@@ -24,7 +24,7 @@ export const useChatStore = defineStore('chat', () => {
 
   const { messages, shouldScroll } = storeToRefs(messagesStore)
   const { users } = storeToRefs(userStore)
-  const { typingUser } = storeToRefs(typing)
+  const { typingUsers } = storeToRefs(typing)
   // const { friendStatusCache } = storeToRefs(friendsActions)
   const { receiverID } = storeToRefs(mode)
 
@@ -35,7 +35,7 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     users,
     shouldScroll,
-    typingUser,
+    typingUsers,
     // friendStatusCache,
     receiverID,
     imageUrlCache,

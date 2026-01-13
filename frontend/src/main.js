@@ -26,6 +26,7 @@ const router = createRouter({
   routes
 })
 
+document.addEventListener('contextmenu', e => e.preventDefault())
 const app = createApp(App)
 
 app.use(createPinia()) 

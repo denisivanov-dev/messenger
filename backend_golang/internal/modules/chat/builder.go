@@ -1,34 +1,24 @@
 package chat
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"messenger/backend_golang/internal/common"
-	"messenger/backend_golang/internal/modules/utils"
 )
 
-func BuildMessage(action, senderID, username string, env common.Envelope) common.Envelope {
-	t := strings.TrimSpace(strings.ToLower(env.ChatType))
-	chatID := utils.ResolveChatID(t, senderID, env.TargetID)
+func BuildMessageEnvelope(
+	action string,
+	chatType string,
+	chatID string,
+	senderID string,
+	targetID string,
+	username string,
+	payload common.MessagePayload,
+) common.Envelope {
 
-	payload := common.MessagePayload{
-		Attachments: []common.Attachment{},
-		EditedAt:    0,
-		IsEdited:    false,
-		MessageID:   uuid.NewString(),
-		Pinned:      false,
-		ReplyTo:     nil,
-		ReplyToText: nil,
-		ReplyToUser: nil,
-		Text:        "",
-		Username:    username,
-	}
-
-	raw, _ := json.Marshal(env.Payload)
-	_ = json.Unmarshal(raw, &payload)
+	t := strings.ToLower(strings.TrimSpace(chatType))
 
 	if payload.MessageID == "" {
 		payload.MessageID = uuid.NewString()
@@ -68,37 +58,45 @@ func BuildMessage(action, senderID, username string, env common.Envelope) common
 	return common.Envelope{
 		Kind:      "message",
 		Action:    action,
-		ChatID:    chatID,
 		ChatType:  t,
+		ChatID:    chatID,
 		SenderID:  senderID,
-		TargetID:  env.TargetID,
+		TargetID:  targetID,
 		Timestamp: time.Now().UnixMilli(),
 		Payload:   payload,
 	}
 }
 
-func BuildSystemMessage(action, chatType, fromUserID, toUserID, text, context string) common.Envelope {
-	t := strings.TrimSpace(strings.ToLower(chatType))
-	chatID := utils.ResolveChatID(t, fromUserID, toUserID)
+func BuildSystemMessageEnvelope(
+	action string,
+	chatType string,
+	chatID string,
+	fromUserID string,
+	toUserID string,
+	text string,
+	context string,
+) common.Envelope {
 
-	sysPayload := common.SystemPayload{
+	t := strings.ToLower(strings.TrimSpace(chatType))
+
+	payload := common.SystemPayload{
 		SystemID:  uuid.NewString(),
-		Text:      text,
 		Event:     action,
+		Text:      text,
 		ActorID:   fromUserID,
 		TargetID:  toUserID,
-		Timestamp: time.Now().UnixMilli(),
 		Context:   context,
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	return common.Envelope{
 		Kind:      "system",
 		Action:    action,
-		ChatID:    chatID,
 		ChatType:  t,
+		ChatID:    chatID,
 		SenderID:  "0",
 		TargetID:  toUserID,
 		Timestamp: time.Now().UnixMilli(),
-		Payload:   sysPayload,
+		Payload:   payload,
 	}
 }

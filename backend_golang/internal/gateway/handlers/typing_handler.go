@@ -1,26 +1,20 @@
-//go:build ignore
-
 package handlers
 
 import (
-	"encoding/json"
-
 	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/gateway/hub"
 	"messenger/backend_golang/internal/gateway/types"
 	gwutils "messenger/backend_golang/internal/gateway/utils"
 	"messenger/backend_golang/internal/modules/chat"
+	"messenger/backend_golang/internal/modules/events/typing"
 )
 
 func RegisterTyping() {
-	hub.Register("typing", handleTyping)
+	hub.Register("event_typing", handleTyping)
 }
 
-func handleTyping(c types.ClientLike, raw json.RawMessage) {
-	var payload common.IncomingInitPrivate
-	if !gwutils.UnmarshalPayload(raw, &payload, c, "invalid typing payload") {
-		return
-	}
+func handleTyping(c types.ClientLike, env common.Envelope) {
+	typing.HandleTypingEvent(c, env)
 
 	rdb := gwutils.GetRedis(c)
 	if rdb == nil {
@@ -28,17 +22,25 @@ func handleTyping(c types.ClientLike, raw json.RawMessage) {
 		return
 	}
 
-	roomID, ok := chat.ResolveRoom(rdb, c.ID(), payload.ChatType, payload.ReceiverID)
+	roomID, ok := chat.ResolveRoom(
+		rdb,
+		c.ID(),
+		env.ChatType,
+		env.TargetID,
+	)
 	if !ok {
 		c.SendError("access denied")
 		return
 	}
 
 	c.JoinRoomIfNotJoined(roomID)
-	c.BroadcastJSON(roomID, common.TypingMessage{
-		Type:     "typing",
-		UserID:   c.ID(),
-		Username: c.Username(),
-		ChatID:   roomID,
-	})
+
+	out := typing.BuildTypingEnvelope(
+		env.ChatType,
+		roomID,
+		env.TargetID,
+		c.ID(),
+		c.Username(),
+	)
+	c.BroadcastJSON(roomID, out)
 }

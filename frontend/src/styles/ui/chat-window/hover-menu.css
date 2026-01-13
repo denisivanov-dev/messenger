@@ -1,0 +1,7 @@
+.icon-btn {
+  @apply inline-flex items-center justify-center
+         p-0 m-0
+         text-gray-300
+         transition-colors duration-150
+         hover:text-white;
+}

@@ -173,7 +173,20 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 
 // Берём реактивные ссылки из Pinia
-const { users, friendStatusCache } = storeToRefs(chatStore)
+// const { users, friendStatusCache } = storeToRefs(chatStore) 
+
+// DELETE THIS AND REVERT TO PREVIOUS WHEN IT STARTS WORKING
+let users = ref([])
+let friendStatusCache = ref({})
+
+try {
+  const chatStore = useChatStore()
+  const refs = storeToRefs(chatStore)
+  users = refs.users
+  friendStatusCache = refs.friendStatusCache
+} catch (e) {
+  console.warn('chatStore not ready yet')
+}
 
 const incomingRequests = computed(() =>
   Object.values(users.value || {}).filter(u => friendStatusCache.value?.[u.id] === 'incoming')

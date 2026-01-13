@@ -3,10 +3,13 @@ import { ref } from 'vue'
 import { sendSocketPayload } from '../../connection/ws/send'
 import { startPrivateChat } from '../api/chatApi'
 import { isNearBottom } from '../utils/chatWindowUtils'
+import { useTypingStore } from './events/typingStore'
 
 export const useMessagesStore = defineStore('messages', () => {
   const messages = ref([])
   const shouldScroll = ref(false)
+
+  const typingStore = useTypingStore()
 
   function clear() {
     messages.value = []
@@ -32,9 +35,14 @@ export const useMessagesStore = defineStore('messages', () => {
         return
       }
       messages.value.push(env)
+
+      if (env.sender_id) {
+        typingStore.removeTyping(env.sender_id)
+      }
     } catch (err) {
       console.error('[WS] push crash:', err, env)
     }
+
 
     shouldScroll.value = isNearBottom()
   }
@@ -77,7 +85,8 @@ export const useMessagesStore = defineStore('messages', () => {
     if (pinned) pinned.pinned = action === 'pin'
   }
 
-  function sendMessageData({ text = '', attachments = [], replyToMessage = null }, chatType, receiverID) {
+  function sendMessageData({ text = '', attachments = [], replyToMessage = null }, 
+    chatType, receiverID) {
     if (!text.trim() && attachments.length === 0) return
 
     const safeAttachments = attachments.map(att => ({
@@ -87,6 +96,7 @@ export const useMessagesStore = defineStore('messages', () => {
       original_name: att.original_name,
     }))
 
+    console.info(chatType, receiverID)
     const msg = {
       kind: 'message',
       action: 'send',

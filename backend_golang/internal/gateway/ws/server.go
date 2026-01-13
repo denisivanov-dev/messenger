@@ -50,10 +50,8 @@ func ServeWS(h *hub.Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request
 	}
 
 	// Broadcast presence to all clients ===
-	h.BroadcastMessage(types.RoomMessage{
-		RoomID: types.SystemRoom,
-		Data:   online.BuildStatusMessage(userID, "online"),
-	})
+	statusMsg := online.BuildStatusMessage(userID, "online")
+	c.BroadcastJSON(types.SystemRoom, statusMsg)
 
 	h.RegisterClient(c)
 	go c.WritePump()

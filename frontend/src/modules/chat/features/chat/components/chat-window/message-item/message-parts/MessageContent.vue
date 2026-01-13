@@ -131,7 +131,7 @@ const dateStyle = computed(() => ({
 const timeStyle = computed(() => ({
   fontSize: `${10 * zoom.value}px`,
   left: `${-40 * zoom.value}px`,
-  top: `${(16 * zoom.value) / 4}px`,  // динамический центр строки
+  top: `${(16 * zoom.value) / 4}px`,
 }))
 
 /* ===== PIN ===== */

@@ -20,7 +20,15 @@ func RegisterChat() {
 
 func handleSendMessage(c types.ClientLike, env common.Envelope) {
 	var payload common.MessagePayload
-	jutils.MapToStruct(env.Payload, &payload)
+	if err := jutils.MapToStruct(env.Payload, &payload); err != nil {
+		c.SendError("invalid message payload")
+		return
+	}
+
+	if payload.Text == "" {
+		c.SendError("empty message")
+		return
+	}
 	env.Payload = payload
 
 	if len(payload.Attachments) > 5 {

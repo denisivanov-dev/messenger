@@ -1,7 +1,11 @@
 <template>
   <div
     ref="userListWindowRef"
-    class="user-list-window w-[250px] h-[864px] p-5 bg-gray-100 rounded-2xl shadow-md overflow-y-auto flex flex-col gap-4 select-none"
+    class="right-panel w-[280px] h-full p-4
+          bg-[rgba(25,25,28,0.85)] backdrop-blur-md
+          border-l border-[rgba(255,255,255,0.07)]
+          shadow-[0_0_20px_rgba(0,0,0,0.4)]
+          flex flex-col gap-4 select-none"
   >
     <!-- Онлайн пользователи -->
     <div>
