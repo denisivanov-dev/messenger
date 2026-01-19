@@ -68,15 +68,15 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   function handleDeleted(messageId) {
-    messages.value = messages.value.filter(m => m.message_id !== messageId)
+    messages.value = messages.value.filter(m => m.payload.message_id !== messageId)
   }
 
   function handleEdited(messageId, newText, editedAt) {
-    const edited = messages.value.find(m => m.message_id === messageId)
+    const edited = messages.value.find(m => m.payload.message_id === messageId)
     if (edited) {
-      edited.text = newText
+      edited.payload.text = newText
       edited.timestamp = editedAt
-      edited.edited_at = editedAt
+      edited.payload.edited_at = editedAt
     }
   }
 
@@ -123,20 +123,27 @@ export const useMessagesStore = defineStore('messages', () => {
 
   function deleteMessage(message, chatType, receiverID) {
     sendSocketPayload({
-      type: 'delete_message',
-      message_id: message.message_id,
-      receiver_id: receiverID,
-      chat_type: chatType
+      kind: 'message',
+      action: 'delete',
+      chat_type: chatType,
+      target_id: receiverID,
+      timestamp: Date.now(),
+      payload: {
+        message_id: message.payload.message_id,
+      }
     })
   }
 
-  function editMessage(message, newText, chatType, receiverID) {
+  function editMessage(messagePayload, newText, chatType, receiverID) {
     sendSocketPayload({
-      type: 'edit_message',
-      message_id: message.message_id,
-      new_text: newText,
-      receiver_id: receiverID,
-      chat_type: chatType
+      kind: 'message',
+      action: 'edit',
+      chat_type: chatType,
+      target_id: receiverID,
+      payload: {
+        message_id: messagePayload.message_id,
+        text: newText,
+      }
     })
   }
 

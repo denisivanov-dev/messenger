@@ -9,7 +9,7 @@ export function handleMessageEvents(msg, stores) {
     case 'edit':
       return messagesStore.handleEdited(
         payload.message_id,
-        payload.new_text,
+        payload.text,
         payload.edited_at
       )
 

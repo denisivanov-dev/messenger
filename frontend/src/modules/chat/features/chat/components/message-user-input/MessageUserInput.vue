@@ -76,18 +76,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { PaperclipIcon, XIcon } from 'lucide-vue-next'
 import { useMessagesStore } from '../../store/messagesStore'
 import { useChatModeStore } from '../../store/chatModeStore'
 import { useTypingStore } from '../../store/events/typingStore'
 import { uploadAllImages } from '../../utils/messageUtils'
 
+const props = defineProps({
+  editingMessage: Object
+})
+
+const emit = defineEmits(['cancel-edit'])
+
 const text = ref('')
+const isEditing = ref(false)
+
 const inputRef = ref(null)
 const fileInput = ref(null)
 const selectedFiles = ref([])
 const previewUrls = ref([])
+
 const isDragging = ref(false)
 
 const messagesStore = useMessagesStore()
@@ -100,6 +109,20 @@ async function send() {
   const hasImages = selectedFiles.value.length > 0
 
   if (!hasText && !hasImages) return
+
+  console.info(props.editingMessage)
+  if (props.editingMessage) {
+    if (trimmedText === props.editingMessage.text) return
+
+    messagesStore.editMessage({
+      message_id: props.editingMessage.message_id,
+    }, trimmedText, chatModeStore.chatType, chatModeStore.receiverID)
+
+    emit('cancel-edit')
+    text.value = ''
+    clearPreview()
+    return
+  }
 
   let attachments = []
   if (hasImages) {
@@ -188,6 +211,22 @@ function focusInputOnKeyPress(event) {
     inputRef.value.focus()
   }
 }
+
+watch(
+  () => props.editingMessage,
+  (msg) => {
+    if (!msg) {
+      isEditing.value = false
+      text.value = ''
+      return
+    }
+
+    isEditing.value = true
+    text.value = msg.text
+    nextTick(() => inputRef.value.focus())
+  },
+  { immediate: true }
+)
 
 /* init */
 onMounted(() => {

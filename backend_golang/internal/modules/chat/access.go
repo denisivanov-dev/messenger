@@ -7,34 +7,24 @@ import (
 	"log"
 
 	rds "github.com/redis/go-redis/v9"
+	
 	"messenger/backend_golang/internal/modules/utils"
 	"messenger/backend_golang/internal/modules/constants"
 )
-
-func GetRoomKey(userID, chatType, receiverID string) string {
-	if chatType == "private" {
-		return utils.GeneratePrivateChatKey(userID, receiverID)
-	}
-	return constants.GlobalRoomID 
-}
 
 // ResolveRoom checks if the user has access to the chat.
 func ResolveRoom(rdb *rds.Client, userID, chatType, receiverID string) (string, bool) {
 	ctx := context.Background()
 
-	chatKey := GetRoomKey(userID, chatType, receiverID)
-
-	if chatKey == constants.GlobalRoomID {
-		return chatKey, true
-	}
-	
-	chatID, err := rdb.Get(ctx, fmt.Sprintf("chat_id:%s", chatKey)).Result()
-	if err != nil {
-		log.Printf("[ResolveRoom] Redis GET chat_id:%s failed: %v", chatKey, err)
+	chatID := utils.ResolveChatID(chatType, userID, receiverID)
+	if chatID == "" {
+		log.Printf("[ResolveRoom] empty chatID (chatType=%s user=%s receiver=%s)", chatType, userID, receiverID)
 		return "", false
 	}
 
-	log.Printf("[ResolveRoom] Mapped chatKey %s → chatID %s", chatKey, chatID)
+	if chatID == constants.GlobalRoomID {
+		return chatID, true
+	}
 
 	ok, err := rdb.SIsMember(ctx, fmt.Sprintf("chat:%s:participants", chatID), userID).Result()
 	if err != nil {
@@ -42,7 +32,7 @@ func ResolveRoom(rdb *rds.Client, userID, chatType, receiverID string) (string, 
 		return "", false
 	}
 	if !ok {
-		log.Printf("[ResolveRoom] Access denied: user %s not in chat %s", userID, chatID)
+		log.Printf("[ResolveRoom] access denied: user %s not in chat %s", userID, chatID)
 		return "", false
 	}
 

@@ -10,16 +10,11 @@ import (
 	"messenger/backend_golang/internal/modules/voice"
 )
 
-func HandleSendMessage(
-	env common.Envelope,
-	rdb *redis.Client,
-	senderID string,
-	username string,
-) (common.Envelope, bool) {
+func HandleSendUserMessage(env common.Envelope, chatID string, rdb *redis.Client,
+	senderID, username string,) (common.Envelope, bool) {
 
-	chatID := utils.ResolveChatID(env.ChatType, senderID, env.TargetID)
 	if chatID == "" {
-		log.Printf("[chat] empty ChatID in message, skipping")
+		log.Printf("[chat] empty chatID in HandleSendUserMessage")
 		return common.Envelope{}, false
 	}
 
@@ -39,8 +34,7 @@ func HandleSendMessage(
 		payload,
 	)
 
-	go SaveMessageToRedisHistory(rdb, outMsg.ChatID, outMsg)
-
+	go SaveMessageToRedisHistory(rdb, chatID, outMsg)
 	return outMsg, true
 }
 

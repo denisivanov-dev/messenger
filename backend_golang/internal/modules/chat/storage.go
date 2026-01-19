@@ -10,8 +10,6 @@ import (
 )
 
 func SaveMessageToRedisHistory(rdb *rds.Client, roomID string, msg common.Envelope) {
-	msg.ChatID = roomID
-
 	historyKey := HistoryKey(roomID)
 	queueKey := QueueKey("to_save", roomID)
 

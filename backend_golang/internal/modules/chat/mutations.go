@@ -12,7 +12,9 @@ import (
 	"messenger/backend_golang/redis"
 )
 
-func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID, currentUserID string) *common.Envelope {
+func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID, 
+	currentUserID, username string,) *common.Envelope {
+
 	historyKey := HistoryKey(chatID)
 	queueKey := QueueKey("to_delete", chatID)
 
@@ -24,7 +26,7 @@ func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID, currentUs
 
 	for _, raw := range vals {
 		var env common.Envelope
-		if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		if json.Unmarshal([]byte(raw), &env) != nil {
 			continue
 		}
 
@@ -38,29 +40,30 @@ func DeleteMessageFromRedisHistory(rdb *rds.Client, chatID, messageID, currentUs
 
 		_, _ = rdb.LRem(context.Background(), historyKey, 1, raw).Result()
 
-		// use envelope buidler instead
-		out := common.Envelope{
-			Kind:      "message",
-			Action:    "delete",
-			ChatID:    chatID,
-			ChatType:  env.ChatType,
-			SenderID:  currentUserID,
-			TargetID:  env.TargetID,
-			Timestamp: time.Now().UnixMilli(),
-			Payload: common.MessagePayload{
+		out := BuildMessageEnvelope(
+			"delete",
+			env.ChatType,
+			chatID,
+			currentUserID,
+			env.TargetID,
+			username,
+			common.MessagePayload{
 				MessageID: messageID,
 			},
-		}
+		)
 
 		if data, err := json.Marshal(out); err == nil {
 			redis.RPush(rdb, queueKey, data)
 		}
 		return &out
 	}
+
 	return nil
 }
 
-func EditMessageInRedisHistory(rdb *rds.Client, chatID, messageID, newText, currentUserID string) *common.Envelope {
+func EditMessageInRedisHistory(rdb *rds.Client,chatID, messageID, 
+	newText, currentUserID, username string,) *common.Envelope {
+
 	historyKey := HistoryKey(chatID)
 	queueKey := QueueKey("to_edit", chatID)
 
@@ -72,7 +75,7 @@ func EditMessageInRedisHistory(rdb *rds.Client, chatID, messageID, newText, curr
 
 	for i, raw := range vals {
 		var env common.Envelope
-		if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		if json.Unmarshal([]byte(raw), &env) != nil {
 			continue
 		}
 
@@ -88,35 +91,32 @@ func EditMessageInRedisHistory(rdb *rds.Client, chatID, messageID, newText, curr
 		}
 
 		msg.Text = newText
+		msg.IsEdited = true
 		msg.EditedAt = time.Now().UnixMilli()
 		env.Payload = msg
 
 		updatedRaw, _ := json.Marshal(env)
 		_ = rdb.LSet(context.Background(), historyKey, int64(i), updatedRaw).Err()
 
-		out := common.Envelope{
-			Kind:      "message",
-			Action:    "edit",
-			ChatID:    chatID,
-			ChatType:  env.ChatType,
-			SenderID:  currentUserID,
-			TargetID:  env.TargetID,
-			Timestamp: msg.EditedAt,
-			Payload: common.MessagePayload{
-				MessageID: msg.MessageID,
-				Text:      msg.Text,
-				EditedAt:  msg.EditedAt,
-				Pinned:    msg.Pinned,
-			},
-		}
+		out := BuildMessageEnvelope(
+			"edit",
+			env.ChatType,
+			chatID,
+			currentUserID,
+			env.TargetID,
+			username,
+			msg,
+		)
 
 		if data, err := json.Marshal(out); err == nil {
 			redis.RPush(rdb, queueKey, data)
 		}
 		return &out
 	}
+
 	return nil
 }
+
 
 func PinMessageInRedisHistory(rdb *rds.Client, chatID, messageID string, pin bool, currentUserID string) *common.Envelope {
 	historyKey := HistoryKey(chatID)

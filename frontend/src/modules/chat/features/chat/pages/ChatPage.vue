@@ -21,7 +21,11 @@
           @cancel-edit="editingMessage = null"
         />
 
-        <MessageUserInput ref="msgInputRef" class="shrink-0" />
+        <MessageUserInput
+          ref="msgInputRef"
+          class="shrink-0"
+          :editingMessage="editingMessage"
+        />
       </div>
 
       <UserListWindow ref="userListRef" class="shrink-0" />
