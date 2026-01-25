@@ -2,7 +2,7 @@ import smtplib
 import random
 from email.mime.text import MIMEText
 
-from data.gmail_data import email as sender_email, password as sender_password
+from backend_python.data.gmail_data import email as sender_email, password as sender_password
 
 import asyncio
 

@@ -1,6 +1,6 @@
 from typing import Tuple, Optional, Dict
 import re
-from data.validation_data import FORBIDDEN_USERNAMES, BLOCKED_DOMAINS, COMMON_WEAK_PASSWORDS
+from backend_python.data.validation_data import FORBIDDEN_USERNAMES, BLOCKED_DOMAINS, COMMON_WEAK_PASSWORDS
 
 def validate_empty_data(fields: list[tuple[str, str]]) -> tuple[bool, dict[str, str]]:
     field_error_messages = {

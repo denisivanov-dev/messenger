@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
+	_ = godotenv.Load("../.env")
 
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {

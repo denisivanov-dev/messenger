@@ -1,10 +1,9 @@
 root = "."
-testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
   bin = "tmp/main"
-  cmd = "echo USING AIR.DOCKER.TOML && go build -o ./tmp/main ./backend_golang/cmd/server/main.go"
+  cmd = "go build -o ./tmp/main ./cmd/server/main.go"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   include_ext = ["go", "tpl", "tmpl", "html"]

@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/redis/go-redis/v9"
+	
 	"messenger/backend_golang/internal/common"
 	"messenger/backend_golang/internal/gateway/types"
 )

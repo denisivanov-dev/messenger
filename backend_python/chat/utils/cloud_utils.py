@@ -1,7 +1,7 @@
 import uuid
 import mimetypes
 import io
-from data.cloud_data import r2_client, R2_BUCKET_NAME
+from backend_python.data.cloud_data import r2_client, R2_BUCKET_NAME
 
 async def upload_to_r2(filename: str, content: bytes) -> tuple[str, int]:
     file_ext = filename.split('.')[-1].lower()

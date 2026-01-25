@@ -1,17 +1,22 @@
+import os
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-try:
-    from backend_python.config import DB_URL
-except ImportError:
-    DB_URL = "postgresql+asyncpg://app:app@db:5432/app"
+load_dotenv()
 
-engine = create_async_engine(DB_URL, echo=False)
+DATABASE_URL = os.environ["DATABASE_URL"] 
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+)
 
 async_session = sessionmaker(
     bind=engine,
     expire_on_commit=False,
-    class_=AsyncSession
+    class_=AsyncSession,
 )
 
 Base = declarative_base()

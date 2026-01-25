@@ -2,8 +2,8 @@ import asyncio
 from backend_python.chat.repository.user_repo import get_all_users
 from backend_python.core.db_client import SessionFactory
 from backend_python.core.redis_client import redis_client
-from data.avatar_data import DEFAULT_AVATAR_URL
-from data.cloud_data import R2_BASE_URL
+from backend_python.data.avatar_data import DEFAULT_AVATAR_URL
+from backend_python.data.cloud_data import R2_BASE_URL
 
 async def preload_all_users() -> None:
     async with SessionFactory() as db:
