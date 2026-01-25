@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"context"
 
-	"messenger/backend_golang/internal/chat"
-	"messenger/backend_golang/internal/utils"
+	"backend_golang/internal/chat"
+	"backend_golang/internal/utils"
 )
 
 func (c *Client) joinRoomIfNotJoined(roomID string) {

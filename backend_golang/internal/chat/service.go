@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"messenger/backend_golang/internal/common"
-	"messenger/backend_golang/internal/utils"
+	"backend_golang/internal/common"
+	"backend_golang/internal/utils"
 )
 
 // func Parse(raw []byte) (common.IncomingMessage, bool) {

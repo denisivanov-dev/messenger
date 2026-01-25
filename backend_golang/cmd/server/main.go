@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/redis/go-redis/v9"
-	"messenger/backend_golang/internal/ws"
-	"messenger/backend_golang/internal/pubsub"
+	"backend_golang/internal/ws"
+	"backend_golang/internal/pubsub"
 	"context"
 )
 

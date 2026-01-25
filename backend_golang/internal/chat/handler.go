@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/redis/go-redis/v9"
-	"messenger/backend_golang/internal/common"
+	"backend_golang/internal/common"
 )
 
 func HandleSendMessage(in common.IncomingSendMessage, userID, username string, rdb *redis.Client) (common.OutgoingMessage, bool) {

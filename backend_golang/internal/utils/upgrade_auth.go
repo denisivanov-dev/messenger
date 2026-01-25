@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"messenger/backend_golang/internal/jwt"
+	"backend_golang/internal/jwt"
 )
 
 var upgrader = websocket.Upgrader{

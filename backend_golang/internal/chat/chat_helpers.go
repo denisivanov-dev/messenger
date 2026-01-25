@@ -1,6 +1,6 @@
 package chat
 
-import "messenger/backend_golang/internal/common"
+import "backend_golang/internal/common"
 
 func NormalizeMessage(msg *common.OutgoingMessage, chatID string) {
 	if msg.ChatID == "" {

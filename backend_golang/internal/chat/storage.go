@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/redis/go-redis/v9"
-	"messenger/backend_golang/internal/common"
+	"backend_golang/internal/common"
 )
 
 func SaveToRedis(rdb *redis.Client, msg common.OutgoingMessage) {

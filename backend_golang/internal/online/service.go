@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/redis/go-redis/v9"
-	"messenger/backend_golang/internal/common"
+	"backend_golang/internal/common"
 )
 
 func SetOnline(ctx context.Context, rdb *redis.Client, userID string) error {

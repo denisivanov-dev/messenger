@@ -7,9 +7,9 @@ import (
 
 	rds "github.com/redis/go-redis/v9"
 
-	"messenger/backend_golang/internal/common"
-	"messenger/backend_golang/internal/online"
-	"messenger/backend_golang/internal/utils"
+	"backend_golang/internal/common"
+	"backend_golang/internal/online"
+	"backend_golang/internal/utils"
 )
 
 func ServeWS(hub *Hub, rdb *rds.Client, w http.ResponseWriter, r *http.Request) {

@@ -10,10 +10,10 @@ import (
 	"github.com/gorilla/websocket"
 	rds "github.com/redis/go-redis/v9"
 
-	"messenger/backend_golang/internal/chat"
-	"messenger/backend_golang/internal/common"
-	"messenger/backend_golang/internal/online"
-	"messenger/backend_golang/internal/voice"
+	"backend_golang/internal/chat"
+	"backend_golang/internal/common"
+	"backend_golang/internal/online"
+	"backend_golang/internal/voice"
 )
 
 const (
